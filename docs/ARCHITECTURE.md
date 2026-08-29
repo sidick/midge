@@ -145,16 +145,13 @@ broker independently.
   scaffolding existed anywhere in this codebase or its AmiAuth sibling)
   turned out to need nothing exotic - see the section above for what was
   actually involved.
-- **Phase 3 - TLS.** AmiSSL 5.x as a third `mqtt_transport` implementation
-  behind an `MQTT_TLS` tag; soft-fails when `amissl.library` is absent. An
-  OpenSSL host transport gives test parity.
-- **Phase 4 - Dashboard.** A ClassAct/ReAction application: a widget grid
-  (label/gauge/switch/button) via `layout.gadget`, a plain-text config file,
-  minimal JSON field extraction for Home Assistant-style payloads, and HA
-  MQTT discovery publishing the Amiga's own telemetry (uptime, chip/fast RAM
-  free, CPU model).
-- **Phase 5 - Release.** Aminet upload, a Home Assistant walkthrough in
-  `userdocs/`, an installer, demo capture.
+- **v0.1 (done).** First public release: `mqtt_pub`/`mqtt_sub`, `mqtt.library`,
+  full user docs, Aminet upload.
+
+Work beyond v0.1 (TLS, a ReAction dashboard, remaining release polish, and
+anything else) is tracked as
+[GitHub issues](https://github.com/sidick/midge/issues), not here - see the
+`roadmap` label. This section stays as a record of what already shipped.
 
 ## Testing strategy
 
