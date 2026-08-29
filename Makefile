@@ -397,7 +397,7 @@ dist: build guide $(LHA)
 	for b in mqtt_pub mqtt_sub mqtt_pub-static mqtt_sub-static; do \
 		grep -aqF "\$$VER: $$b $$v (" $(BUILD)/$$b || { echo "dist: $(BUILD)/$$b lacks \"\$$VER: $$b $$v (...)\" - stale build/?"; exit 1; }; \
 	done; \
-	grep -aqF "\$$VER: mqtt.library $$v (" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library lacks \"\$$VER: mqtt.library $$v (...)\" - stale build/?"; exit 1; }
+	grep -aqF "\$$VER: mqtt.library 1.0 (" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library lacks \"\$$VER: mqtt.library 1.0 (...)\" - stale build/? (library \$$VER tracks LibVersion.LibRevision, not MIDGE_VERSION - see src/library/libinit.c)"; exit 1; }
 	rm -rf $(BUILD)/dist
 	mkdir -p $(BUILD)/dist/midge/libs $(BUILD)/dist/midge/developer/fd \
 		$(BUILD)/dist/midge/developer/clib $(BUILD)/dist/midge/developer/proto \
