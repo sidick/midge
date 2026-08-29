@@ -5,7 +5,7 @@
 #include "transport_bsdsocket.h"
 #include "version.h"
 
-MIDGE_VERSTAG("mqtt_pub")
+MIDGE_VERSTAG("mqtt_pub-static")
 
 int main(void)
 {

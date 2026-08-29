@@ -1,10 +1,17 @@
 #!/bin/sh
 # tests/net/volamos-smoke.sh — fast local alternative to net-smoke.sh: runs
-# the cross-built mqtt_pub under volamos (Simon's Rust API-level AmigaOS
-# runtime, ~/src/volamos) instead of Copperline. volamos traps library
-# calls directly at the API boundary rather than booting a full emulated
-# machine, so this finishes in about a second instead of Copperline's
-# ~10s AROS boot - a much tighter loop while iterating locally.
+# the cross-built mqtt_pub-static under volamos (Simon's Rust API-level
+# AmigaOS runtime, ~/src/volamos) instead of Copperline. volamos traps
+# library calls directly at the API boundary rather than booting a full
+# emulated machine, so this finishes in about a second instead of
+# Copperline's ~10s AROS boot - a much tighter loop while iterating locally.
+#
+# Deliberately targets mqtt_pub-static, not the default library-linked
+# mqtt_pub: mqtt.library spawns a dedicated connection subprocess per client
+# via CreateNewProcTags() (see src/library/mqtt_funcs.c), and volamos does
+# not implement that call - only the static build's single-process,
+# direct-bsdsocket codepath can run under volamos today. `make net-smoke`
+# (Copperline) is the one check that exercises both variants.
 #
 # Not a CI substitute for net-smoke.sh: volamos doesn't run real 68020
 # instruction-level codegen through a booted Kickstart the way Copperline
@@ -13,10 +20,11 @@
 # faster first check while developing, or bisecting a networking bug.
 #
 # Usage: sh tests/net/volamos-smoke.sh   (invoked via `make volamos-smoke`,
-# which cross-builds mqtt_pub and the host mqtt_sub-host observer first)
+# which cross-builds mqtt_pub-static and the host mqtt_sub-host observer
+# first)
 set -eu
 
-BIN="${MQTT_PUB_M68K:-build/mqtt_pub}"
+BIN="${MQTT_PUB_STATIC_M68K:-build/mqtt_pub-static}"
 MQTT_SUB="${MQTT_SUB:-build/mqtt_sub-host}"
 PORT=18832
 OUTDIR=$(mktemp -d)

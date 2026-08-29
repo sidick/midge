@@ -124,9 +124,19 @@ broker-smoke: cli
 		sh tests/broker/smoke.sh
 
 # --- m68k: Amiga binaries (amiga-gcc on PATH) ---
-m68k: | $(BUILD)/.dir
-	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/pub_main.c -o $(BUILD)/mqtt_pub
-	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/sub_main.c -o $(BUILD)/mqtt_sub
+# Four binaries: mqtt_pub/mqtt_sub are the default, library-linked tools
+# (OpenLibrary("mqtt.library") + the MQTT_* API, see src/amiga/pub_main_lib.c
+# / sub_main_lib.c) - they link ONLY src/amiga/args.c plus the *_main_lib.c
+# itself (reusing the same ReadArgs template/tool_opts as the static build),
+# never src/core or src/tools, so they need library-headers' caller-side
+# headers (-I$(LIB_INCDIR)) but nothing from the mqtt.library build itself.
+# mqtt_pub-static/mqtt_sub-static are exactly today's link line, renamed -
+# the zero-install fallback that needs only bsdsocket.library.
+m68k: library-headers | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -I$(LIB_INCDIR) src/amiga/args.c src/amiga/pub_main_lib.c -o $(BUILD)/mqtt_pub
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -I$(LIB_INCDIR) src/amiga/args.c src/amiga/sub_main_lib.c -o $(BUILD)/mqtt_sub
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/pub_main.c -o $(BUILD)/mqtt_pub-static
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/sub_main.c -o $(BUILD)/mqtt_sub-static
 
 m68k-docker:
 	$(DOCKER) run --rm --platform linux/amd64 $(DOCKER_USER) -v "$(CURDIR)":/work -w /work \
@@ -327,13 +337,18 @@ example-smoke: library examples cli
 	sh tests/library/example-run.sh
 
 # --- On-target network smoke: Copperline HostSocket -> host Mosquitto ---
-# No machine-specific assets needed - see tests/net/README.md.
-net-smoke: m68k cli
+# No machine-specific assets needed - see tests/net/README.md. Needs
+# `library` too: net-smoke.sh stages build/mqtt.library for the default,
+# library-linked mqtt_pub build it now also exercises alongside
+# mqtt_pub-static.
+net-smoke: m68k library cli
 	sh tests/net/net-smoke.sh
 
 # --- Same check via volamos: no emulated boot, much faster local loop ---
 # Not a CI/release gate (see tests/net/volamos-smoke.sh) - just a quicker
 # way to iterate on the Amiga networking code than a full Copperline boot.
+# Only exercises mqtt_pub-static (volamos can't run mqtt.library's
+# subprocess-per-client model) - no `library` dependency needed here.
 volamos-smoke: m68k cli
 	sh tests/net/volamos-smoke.sh
 
@@ -371,7 +386,7 @@ $(BUILD)/tools/lha:
 # src/version.h, closing the loop: tag == src/version.h == the binaries.
 dist: build guide $(LHA)
 	@v=$$(sed -n 's/^#define MIDGE_VERSION[[:space:]]*"\(.*\)"$$/\1/p' src/version.h); \
-	for b in mqtt_pub mqtt_sub; do \
+	for b in mqtt_pub mqtt_sub mqtt_pub-static mqtt_sub-static; do \
 		grep -aqF "\$$VER: $$b $$v (" $(BUILD)/$$b || { echo "dist: $(BUILD)/$$b lacks \"\$$VER: $$b $$v (...)\" - stale build/?"; exit 1; }; \
 	done; \
 	grep -aqF "\$$VER: mqtt.library $$v (" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library lacks \"\$$VER: mqtt.library $$v (...)\" - stale build/?"; exit 1; }
@@ -380,8 +395,8 @@ dist: build guide $(LHA)
 		$(BUILD)/dist/midge/developer/clib $(BUILD)/dist/midge/developer/proto \
 		$(BUILD)/dist/midge/developer/inline $(BUILD)/dist/midge/developer/libraries \
 		$(BUILD)/dist/midge/developer/examples
-	cp $(BUILD)/mqtt_pub $(BUILD)/mqtt_sub $(BUILD)/midge.guide \
-		LICENSE midge.readme $(BUILD)/dist/midge/
+	cp $(BUILD)/mqtt_pub $(BUILD)/mqtt_sub $(BUILD)/mqtt_pub-static $(BUILD)/mqtt_sub-static \
+		$(BUILD)/midge.guide LICENSE midge.readme $(BUILD)/dist/midge/
 	cp $(BUILD)/mqtt.library $(BUILD)/dist/midge/libs/
 	cp src/library/mqtt_lib.sfd src/library/mqtt.doc $(BUILD)/dist/midge/developer/
 	cp $(LIB_INCDIR)/fd/mqtt_lib.fd $(BUILD)/dist/midge/developer/fd/

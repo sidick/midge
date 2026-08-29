@@ -12,20 +12,30 @@ your Amiga on a modern smart-home network (Home Assistant, Mosquitto, EMQX)
 
 This release ships:
 
-  mqtt_pub      - publish a message to a broker topic
+  mqtt_pub      - publish a message to a broker topic (needs mqtt.library,
+                   below, copied to LIBS: first)
   mqtt_sub      - subscribe to topic filters and print incoming messages
+                   (needs mqtt.library, below, copied to LIBS: first)
+  mqtt_pub-static - the same mqtt_pub, statically linked: no mqtt.library
+                     install needed, but QoS 0 publish only
+  mqtt_sub-static - the same mqtt_sub, statically linked: no mqtt.library
+                     install needed
   libs/mqtt.library - a shared library exposing the same MQTT client to
-                       other AmigaOS programs (copy to LIBS: to install)
+                       other AmigaOS programs (copy to LIBS: to install -
+                       required by mqtt_pub/mqtt_sub above)
   developer/    - mqtt.library's .sfd/.fd/proto/inline/clib headers,
                    its mqtt.doc autodoc, and two example caller programs
                    (pubexample.c/subexample.c) for third-party developers
 
-mqtt_pub/mqtt_sub follow AmigaDOS conventions (ReadArgs templates, Ctrl-C
-to stop) and speak plain MQTT 3.1.1 over TCP via bsdsocket.library;
-mqtt.library exposes the same client, plus QoS 1 publish/subscribe and an
-optional auto-reconnect mode, as a normal shared library. See
-https://sidick.github.io/midge/mqtt-library/ for the full mqtt.library
-guide.
+mqtt_pub/mqtt_sub and their -static counterparts all follow the same
+AmigaDOS conventions (ReadArgs templates, Ctrl-C to stop) and speak plain
+MQTT 3.1.1 over TCP. mqtt_pub/mqtt_sub are backed by mqtt.library and
+support QoS 0 and QoS 1 publish; mqtt_pub-static/mqtt_sub-static talk to
+bsdsocket.library directly with no library install required, but
+mqtt_pub-static only supports QoS 0 publish. mqtt.library itself also
+exposes an optional auto-reconnect mode to programs written against it
+directly. See https://sidick.github.io/midge/mqtt-library/ for the full
+mqtt.library guide.
 
 Planned for future releases: TLS via AmiSSL, and a ReAction dashboard
 application with Home Assistant MQTT discovery.

@@ -1,5 +1,18 @@
 # CLI Reference
 
+## Two build flavours
+
+The release archive ships two builds of each tool, sharing the same
+command-line syntax below:
+
+- `mqtt_pub` / `mqtt_sub` - the default build. Backed by
+  [mqtt.library](mqtt-library.md), so `libs/mqtt.library` from the archive
+  must be copied to `LIBS:` first. Supports `QOS` 0 and 1 on publish.
+- `mqtt_pub-static` / `mqtt_sub-static` - statically linked builds that
+  need nothing beyond `bsdsocket.library` (no library install required).
+  `mqtt_sub-static` subscribes at `QOS` 0 or 1 same as the default build;
+  `mqtt_pub-static` only supports `QOS` 0 on publish.
+
 ## mqtt_pub
 
 Publish a single message to a broker topic and exit.

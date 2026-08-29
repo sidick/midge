@@ -1,3 +1,7 @@
-; Publishes one message to the host Mosquitto started by net-smoke.sh.
-; PORT here must match net-smoke.sh's own PORT variable.
-mqtt_pub HOST 127.0.0.1 PORT 18831 TOPIC midge/net-smoke MESSAGE hello-from-copperline
+; Publishes two messages to the host Mosquitto started by net-smoke.sh: one
+; from the static, zero-install mqtt_pub-static, one from the default,
+; library-linked mqtt_pub (which needs sys/Libs/mqtt.library, staged by
+; net-smoke.sh alongside this Startup-Sequence). PORT here must match
+; net-smoke.sh's own PORT variable.
+mqtt_pub-static HOST 127.0.0.1 PORT 18831 TOPIC midge/net-smoke MESSAGE hello-from-copperline-static
+mqtt_pub HOST 127.0.0.1 PORT 18831 TOPIC midge/net-smoke MESSAGE hello-from-copperline-lib

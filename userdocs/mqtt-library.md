@@ -17,6 +17,11 @@ Copy `libs/mqtt.library` from the release archive to `LIBS:`. Programs
 that use it then just `OpenLibrary("mqtt.library", 0)` like any other
 shared library - there is nothing else to configure.
 
+The default `mqtt_pub`/`mqtt_sub` CLI tools are themselves mqtt.library
+callers, so this same install step is required before they will run; see
+[Two build flavours](CLI-Reference.md#two-build-flavours) for the
+statically linked `-static` alternative that needs no library install.
+
 ## Architecture, in brief
 
 Each client handle you create is backed by its own dedicated AmigaOS
