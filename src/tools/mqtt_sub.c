@@ -77,20 +77,32 @@ int mqtt_sub_run(const tool_opts *opts, mqtt_transport *transport)
                (unsigned)opts->port);
     if (mqtt_client_connect(&c, tool_now_ms()) != 0) {
         fprintf(stderr, "mqtt_sub: connect failed\n");
+        transport->close(transport->ctx);
         return 1;
     }
 
     deadline = tool_now_ms() + (uint32_t)opts->keepalive * 1000u + 5000u;
     while (mqtt_client_get_state(&c) == MQTT_CS_CONNECTING) {
+        if (g_stop) {
+            fprintf(stderr, "mqtt_sub: interrupted waiting for CONNACK\n");
+            transport->close(transport->ctx);
+            return 1;
+        }
         if (mqtt_client_process(&c, tool_now_ms(), NULL, NULL) != 0) {
             fprintf(stderr, "mqtt_sub: connect refused or timed out "
                             "(code %d, CONNACK %u)\n",
                     mqtt_client_last_error(&c),
                     (unsigned)mqtt_client_connack_code(&c));
+            transport->close(transport->ctx);
             return 1;
         }
-        if (tool_now_ms() > deadline) {
+        /* Wrap-safe elapsed-time compare (now - deadline as a signed
+         * difference of the unsigned subtraction), matching src/core's own
+         * keepalive arithmetic - a plain `now > deadline` misbehaves across
+         * tool_now_ms()'s ~49.7-day uint32 wrap. */
+        if ((int32_t)(tool_now_ms() - deadline) >= 0) {
             fprintf(stderr, "mqtt_sub: timed out waiting for CONNACK\n");
+            transport->close(transport->ctx);
             return 1;
         }
     }
@@ -100,6 +112,7 @@ int mqtt_sub_run(const tool_opts *opts, mqtt_transport *transport)
     if (mqtt_client_subscribe(&c, filter, opts->qos) != 0) {
         fprintf(stderr, "mqtt_sub: subscribe failed (code %d)\n",
                 mqtt_client_last_error(&c));
+        transport->close(transport->ctx);
         return 1;
     }
     if (opts->verbose)
@@ -114,6 +127,7 @@ int mqtt_sub_run(const tool_opts *opts, mqtt_transport *transport)
         if (mqtt_client_process(&c, tool_now_ms(), on_publish, &sctx) != 0) {
             fprintf(stderr, "mqtt_sub: connection lost (code %d)\n",
                     mqtt_client_last_error(&c));
+            transport->close(transport->ctx);
             return 1;
         }
         if (sctx.limit > 0 && sctx.seen >= sctx.limit)

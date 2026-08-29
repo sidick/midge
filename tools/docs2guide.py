@@ -266,13 +266,18 @@ def _bullet(pre, body):
 
 
 def version(root):
-    try:
-        src = open(os.path.join(root, 'src/version.h')).read()
-        v = re.search(r'MIDGE_VERSION\s+"([^"]+)"', src).group(1)
-        d = re.search(r'MIDGE_VERSION_DATE\s+"([^"]+)"', src).group(1)
-        return v, d
-    except Exception:
-        return '0.1', ''
+    # Deliberately not swallowing errors here: a src/version.h that can't be
+    # parsed means the guide's $VER would silently ship as the placeholder
+    # '0.1' - fail the build instead so a broken version.h is caught in CI,
+    # not on a released .guide file.
+    path = os.path.join(root, 'src/version.h')
+    src = open(path).read()
+    vm = re.search(r'MIDGE_VERSION\s+"([^"]+)"', src)
+    dm = re.search(r'MIDGE_VERSION_DATE\s+"([^"]+)"', src)
+    if not vm or not dm:
+        sys.exit('docs2guide.py: could not find MIDGE_VERSION/'
+                  'MIDGE_VERSION_DATE in %s' % path)
+    return vm.group(1), dm.group(1)
 
 
 def main():

@@ -71,6 +71,9 @@ typedef struct {
     uint32_t ping_sent_ms;
 
     uint16_t next_packet_id;
+    uint16_t last_subscribe_id; /* packet id of the most recent SUBSCRIBE
+                                    sent by mqtt_client_subscribe(); see
+                                    mqtt_client_last_subscribe_id() */
 } mqtt_client;
 
 /* Wires up `c` against `transport` with connect options `opts` (copied by
@@ -92,6 +95,14 @@ int mqtt_client_publish(mqtt_client *c, mqtt_str topic,
 /* Subscribes to a single filter at the given QoS (0 or 1). Returns 0, or a
  * negative mqtt_err/mqtt_client_err. */
 int mqtt_client_subscribe(mqtt_client *c, mqtt_str filter, uint8_t qos);
+
+/* Packet id of the most recent SUBSCRIBE sent by mqtt_client_subscribe();
+ * lets a caller (e.g. mqtt.library's subprocess) match an incoming SUBACK
+ * against the specific SUBSCRIBE it's waiting on instead of accepting any
+ * SUBACK, which a late reply to a previous timed-out SUBSCRIBE could
+ * otherwise satisfy with the wrong grant code. Meaningless before the
+ * first successful mqtt_client_subscribe() call. */
+uint16_t mqtt_client_last_subscribe_id(const mqtt_client *c);
 
 /* Sends DISCONNECT (best-effort) and closes the transport. Leaves the
  * client in MQTT_CS_DISCONNECTED either way. */
@@ -117,7 +128,8 @@ int mqtt_client_process(mqtt_client *c, uint32_t now_ms, mqtt_msg_cb cb,
  * mqtt_client_process() even with no I/O ready (for a select()/WaitSelect()
  * timeout) - the next scheduled PINGREQ, or the current CONNACK/PINGRESP
  * timeout deadline. Returns 0 if there is no pending deadline (DISCONNECTED,
- * ERROR, or keepalive disabled via opts.keepalive == 0). */
+ * ERROR, or keepalive disabled via opts.keepalive == 0); a genuine deadline
+ * that computes to 0 (wrapped clock) is nudged to 1 so 0 stays unambiguous. */
 uint32_t mqtt_client_next_deadline(const mqtt_client *c);
 
 mqtt_client_state mqtt_client_get_state(const mqtt_client *c);

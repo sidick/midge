@@ -289,18 +289,16 @@ static LONG child_subscribe_wait(MqttClientHandle *h, mqtt_client *client,
                                   UBYTE qos)
 {
     LONG result = (LONG)mqtt_client_subscribe(client, filter, qos);
+    uint16_t want_id;
 
     if (result != 0)
         return result;
 
-    /* Core allocates the SUBSCRIBE's packet id internally (alloc_packet_id()
-     * is file-static in mqtt_client.c) and mqtt_client_subscribe() has no
-     * output parameter for it, so it can't be matched exactly without a
-     * further core change. Because each SUBSCRIBE (whether from
-     * MQTT_Subscribe() or an auto-resubscribe below) is issued one at a
-     * time and waited on to completion before the next, matching on "any
-     * SUBACK" is sound here - see the task notes for this deliberate
-     * deviation from packet-id matching. */
+    /* Match the SUBACK by the packet id core actually sent (see
+     * mqtt_client_last_subscribe_id()), not "any SUBACK" - otherwise a
+     * late SUBACK for a previous SUBSCRIBE that already timed out here
+     * could satisfy this wait with the wrong grant code. */
+    want_id = mqtt_client_last_subscribe_id(client);
     {
         uint32_t wait_start;
 
@@ -318,8 +316,15 @@ static LONG child_subscribe_wait(MqttClientHandle *h, mqtt_client *client,
                 break;
             }
             if (h->ch_AckSeen && h->ch_AckType == MQTT_SUBACK) {
-                result = (h->ch_AckCode == 0x80) ? (LONG)MQTTERR_REFUSED : 0;
-                break;
+                h->ch_AckSeen = 0; /* consumed; keep waiting if it wasn't
+                                       ours - a stale reply must not be
+                                       mistaken for a fresh one on the next
+                                       loop iteration */
+                if (h->ch_AckId == want_id) {
+                    result = (h->ch_AckCode == 0x80) ? (LONG)MQTTERR_REFUSED
+                                                      : 0;
+                    break;
+                }
             }
             if (tool_now_ms() - wait_start >= MQTT_LIB_SUBACK_TIMEOUT_MS)
                 break;
@@ -564,6 +569,16 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
 
                 if (!txbuf || !rxbuf || !txbuf2) {
                     cm->cm_Result = MQTTERR_NOMEM;
+                    break;
+                }
+                /* MQTT_Connect() already guards this on the caller side,
+                 * but guard it here too: reconnecting while have_client is
+                 * already 1 would clobber the live transport's
+                 * fd/socket_base (transport_bsdsocket_connect() resets
+                 * both unconditionally) and, on failure, leave have_client
+                 * wrongly set against a dead transport. */
+                if (have_client) {
+                    cm->cm_Result = MQTTERR_STATE;
                     break;
                 }
 
@@ -940,6 +955,7 @@ VOID MQTT_DeleteClient(struct Library *_base, APTR client)
 {
     MqttClientHandle *h = (MqttClientHandle *)client;
     struct Message *msg;
+    LONG rc;
 
     (void)_base;
     if (!h)
@@ -954,8 +970,19 @@ VOID MQTT_DeleteClient(struct Library *_base, APTR client)
      * MQTTCMD_QUIT handling) only happens once the child has deleted its
      * own cmd_port and is about to return (ending the process) under
      * Forbid() - so by the time do_command() returns here, it's safe to
-     * free everything below. */
-    (void)do_command(h, MQTTCMD_QUIT, MQTT_STR_NULL, NULL, 0, 0, 0);
+     * free everything below.
+     *
+     * do_command() itself can fail without ever reaching the child (its
+     * own CreateMsgPort() for the reply port can return NULL ->
+     * MQTTERR_NOMEM) - in that case QUIT was never delivered, the child is
+     * still alive and may still touch h->ch_MsgPort/h, so freeing them
+     * here would be a cross-task use-after-free. There is no error channel
+     * back to the caller (this function is VOID) and no safe way to make
+     * the child go away, so deliberately leak the handle rather than risk
+     * that; a caller can still retry MQTT_DeleteClient() later. */
+    rc = do_command(h, MQTTCMD_QUIT, MQTT_STR_NULL, NULL, 0, 0, 0);
+    if (rc != 0)
+        return;
 
     while ((msg = GetMsg(h->ch_MsgPort)) != NULL)
         FreeVec(msg);
@@ -979,6 +1006,17 @@ LONG MQTT_Connect(struct Library *_base, APTR client)
     (void)_base;
     if (!h)
         return MQTTERR_NOTCONNECTED;
+    /* A second MQTT_Connect() on an already-connected handle would send
+     * MQTTCMD_CONNECT into the child while have_client is still 1,
+     * clobbering the live ctx->fd/ctx->socket_base (see
+     * transport_bsdsocket_connect()) and, if the second attempt then
+     * failed, leaving the child's have_client wrongly set with a dead
+     * fd/socket_base - the idle pump would FD_SET(-1, ...) and call
+     * through a NULL SocketBase. Reject it here before it ever reaches
+     * the child; child_run()'s MQTTCMD_CONNECT case guards the same thing
+     * for defense in depth. */
+    if (h->ch_Connected)
+        return MQTTERR_STATE;
 
     rc = do_command(h, MQTTCMD_CONNECT, MQTT_STR_NULL, NULL, 0, 0, 0);
     if (rc == 0)
@@ -1047,11 +1085,19 @@ VOID MQTT_FreeMessage(struct Library *_base, APTR client,
 VOID MQTT_Disconnect(struct Library *_base, APTR client)
 {
     MqttClientHandle *h = (MqttClientHandle *)client;
+    LONG rc;
 
     (void)_base;
     if (!h || !h->ch_Connected)
         return;
 
-    (void)do_command(h, MQTTCMD_DISCONNECT, MQTT_STR_NULL, NULL, 0, 0, 0);
-    h->ch_Connected = 0;
+    /* MQTT_Disconnect() is VOID (see mqtt_lib.sfd) - a do_command() failure
+     * here (e.g. MQTTERR_NOMEM from its own CreateMsgPort()) has no return
+     * channel to propagate to the caller, but must not be papered over by
+     * clearing ch_Connected: on failure the DISCONNECT was never delivered,
+     * the child's connection (and its have_client) is untouched, so this
+     * handle is still connected as far as both sides are concerned. */
+    rc = do_command(h, MQTTCMD_DISCONNECT, MQTT_STR_NULL, NULL, 0, 0, 0);
+    if (rc == 0)
+        h->ch_Connected = 0;
 }

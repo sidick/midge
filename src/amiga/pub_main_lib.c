@@ -36,16 +36,32 @@ struct Library *MqttBase;
  * kept off the ~4KB shell stack (CLAUDE.md). */
 #define PUB_LIB_BUF_SIZE 8320
 
-static long read_file(const char *path, unsigned char *buf, size_t cap)
+/* Returns the file's length on success, or -1 on failure with *toobig set
+ * when the file is larger than `cap` (refusing a silent truncation).
+ * fread() filling
+ * `buf` to exactly `cap` bytes does NOT itself set the stream's EOF flag -
+ * that only happens once a read is attempted past the actual end of file -
+ * so an exactly-`cap`-byte file must not be mistaken for "too big"; probe
+ * one more byte with fgetc() to tell the two cases apart. Duplicated from
+ * src/tools/mqtt_pub.c's read_file() - this file is deliberately NOT linked
+ * against src/tools (see the banner above). */
+static long read_file(const char *path, unsigned char *buf, size_t cap,
+                       int *toobig)
 {
     FILE *f = fopen(path, "rb");
     size_t n;
 
+    *toobig = 0;
     if (!f)
         return -1;
     n = fread(buf, 1, cap, f);
-    if (!feof(f)) { /* more data than `cap` - refuse a silent truncation */
+    if (ferror(f)) {
         fclose(f);
+        return -1;
+    }
+    if (n == cap && fgetc(f) != EOF) {
+        fclose(f);
+        *toobig = 1;
         return -1;
     }
     fclose(f);
@@ -64,23 +80,20 @@ int main(void)
 
     if (amiga_parse_args(1, &opts) != 0)
         return 20; /* RETURN_ERROR */
-
-    if (opts.qos > 1) {
-        /* amiga_parse_args() does no range check of its own on QOS/N/K
-         * (src/amiga/args.c just copies the LONG), so this is the check
-         * that actually rejects QoS 2+ - QoS 2 is out of scope for the
-         * whole project (docs/PROTOCOL.md). */
-        fprintf(stderr, "mqtt_pub: QoS %u is not supported\n",
-                (unsigned)opts.qos);
-        amiga_args_cleanup();
-        return 20;
-    }
+    /* QoS 2+ is already rejected by amiga_parse_args() itself
+     * (src/amiga/args.c's `opts->qos > 1` check) - QoS 2 is out of scope
+     * for the whole project (docs/PROTOCOL.md). */
 
     if (opts.file) {
-        payload_len = read_file(opts.file, payload, sizeof(payload));
+        int toobig;
+
+        payload_len = read_file(opts.file, payload, sizeof(payload), &toobig);
         if (payload_len < 0) {
-            fprintf(stderr, "mqtt_pub: cannot read %s (or it exceeds %d bytes)\n",
-                    opts.file, PUB_LIB_BUF_SIZE);
+            if (toobig)
+                fprintf(stderr, "mqtt_pub: %s exceeds %d bytes\n",
+                        opts.file, PUB_LIB_BUF_SIZE);
+            else
+                fprintf(stderr, "mqtt_pub: cannot read %s\n", opts.file);
             amiga_args_cleanup();
             return 20;
         }

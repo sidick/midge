@@ -30,7 +30,7 @@ mqtt_pub HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,
 | `MESSAGE` | Payload text. Mutually exclusive with `FILE`. |
 | `FILE` | Read the payload from a file instead of `MESSAGE`. |
 | `QOS` | 0 or 1 (default 0). |
-| `CLIENTID` | MQTT client identifier (default generated). |
+| `CLIENTID` | MQTT client identifier. If omitted, the CONNECT packet carries an empty client id, asking the broker to assign one; some brokers refuse an empty client id (CONNACK return code 2) unless clean-session behaviour allows it. |
 | `USER` / `PASSWORD` | Broker credentials, if required. |
 | `KEEPALIVE` | Keepalive interval in seconds (default 60). |
 | `RETAIN` | Set the broker's retained flag on this message. |
@@ -58,7 +58,7 @@ mqtt_sub HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,
 | `PORT` | Broker TCP port (default 1883). |
 | `TOPIC` | Topic filter to subscribe to (required); wildcards `+`/`#` allowed. |
 | `QOS` | 0 or 1 (default 0). |
-| `CLIENTID` | MQTT client identifier (default generated). |
+| `CLIENTID` | MQTT client identifier. If omitted, the CONNECT packet carries an empty client id, asking the broker to assign one; some brokers refuse an empty client id (CONNACK return code 2) unless clean-session behaviour allows it. |
 | `USER` / `PASSWORD` | Broker credentials, if required. |
 | `KEEPALIVE` | Keepalive interval in seconds (default 60). |
 | `COUNT` | Exit after receiving this many messages. |

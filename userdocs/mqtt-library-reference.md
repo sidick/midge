@@ -122,9 +122,13 @@ families of negative codes are possible:
       MQTTERR_OK             0   Success.
       MQTTERR_NOMEM        -200  AllocVec()/CreateMsgPort()/process
                                   spawn failed for lack of memory.
-      MQTTERR_NOSTACK      -201  CreateNewProcTags() failed to
-                                  start the client's connection
-                                  subprocess.
+      MQTTERR_NOSTACK      -201  Reserved: MQTT_CreateClient() has
+                                  no error-code return channel (it
+                                  returns APTR, bare NULL on every
+                                  failure, including a
+                                  CreateNewProcTags() failure) -
+                                  this code is never actually
+                                  returned today.
       MQTTERR_NOTCONNECTED -202  Called before MQTT_Connect() has
                                   succeeded, after
                                   MQTT_Disconnect(), or while
@@ -137,6 +141,8 @@ families of negative codes are possible:
       MQTTERR_REFUSED      -204  MQTT_Subscribe(): the broker's
                                   SUBACK refused the subscription
                                   (return code 0x80).
+      MQTTERR_STATE        -205  MQTT_Connect() called on a handle
+                                  that is already connected.
 
   - Codes passed straight through from the portable core
     (src/core/mqtt_packet.h's mqtt_err and src/core/mqtt_client.h's
@@ -289,6 +295,11 @@ Calling MQTT_Connect() again while mco_AutoReconnect is already
 reconnecting in the background fails fast with
 MQTTERR_NOTCONNECTED, rather than racing that attempt - see
 mqtt.library/--background--'s AUTO-RECONNECT section.
+
+Calling MQTT_Connect() again on a handle that is already connected
+fails fast with MQTTERR_STATE and leaves the existing connection
+untouched - call MQTT_Disconnect() first if a fresh connection is
+wanted.
 
 ### Inputs
 

@@ -145,6 +145,24 @@ static void test_encode_bufsize(void)
     TEST_CHECK(mqtt_encode_publish(small, sizeof(small), MQTT_STR("t"),
                                     (const uint8_t *)"hi", 2, 0, 0, 0, 0) ==
                -MQTT_ERR_BUFSIZE);
+
+    /* Regression: cap < 5 (the offset-5 headroom w_init() starts writing
+     * content at) used to underflow `cap - pos` in w_bytes() and let the
+     * encoder memcpy past the end of `buf` before finish_packet() got a
+     * chance to reject it. cap in [0,4] must fail cleanly, no OOB write,
+     * for both a variable-header-only encoder and one with a payload. */
+    {
+        uint8_t b[4] = { 0 };
+        int cap;
+
+        for (cap = 0; cap <= 4; cap++) {
+            TEST_CHECK(mqtt_encode_puback(b, (size_t)cap, 1) ==
+                       -MQTT_ERR_BUFSIZE);
+            TEST_CHECK(mqtt_encode_publish(b, (size_t)cap, MQTT_STR("t"),
+                                            (const uint8_t *)"hi", 2, 0, 0, 0,
+                                            0) == -MQTT_ERR_BUFSIZE);
+        }
+    }
 }
 
 static void test_encode_protocol_errors(void)
@@ -270,6 +288,21 @@ static void test_decode_malformed_flags(void)
     }
 }
 
+/* MQTT-4.7.3-1: PUBLISH topic name must not be empty. */
+static void test_decode_publish_rejects_empty_topic(void)
+{
+    mqtt_packet pkt;
+    uint8_t bad[sizeof(V_PUBLISH_QOS0)];
+
+    memcpy(bad, V_PUBLISH_QOS0, sizeof(bad));
+    /* V_PUBLISH_QOS0 topic length is bytes [2:4) big-endian; zero it and
+     * drop the now-absent topic byte from the remaining length (byte 1). */
+    bad[1] = (uint8_t)(bad[1] - 1);
+    bad[2] = 0;
+    bad[3] = 0;
+    TEST_CHECK(mqtt_decode(bad, sizeof(bad) - 1, &pkt) == -MQTT_ERR_MALFORMED);
+}
+
 static void test_truncation_sweeps(void)
 {
     check_truncation_sweep(V_CONNACK_OK, sizeof(V_CONNACK_OK));
@@ -291,5 +324,6 @@ void run_codec_tests(void)
     test_decode_vectors();
     test_decode_rejects_client_to_broker_types();
     test_decode_malformed_flags();
+    test_decode_publish_rejects_empty_topic();
     test_truncation_sweeps();
 }

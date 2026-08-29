@@ -125,8 +125,14 @@ struct MqttMessage {
 #define MQTTERR_OK            0
 #define MQTTERR_NOMEM       (-200) /* AllocVec/CreateMsgPort/process spawn
                                        failed for lack of memory */
-#define MQTTERR_NOSTACK      (-201) /* CreateNewProcTags() failed to start
-                                        the client's connection subprocess */
+#define MQTTERR_NOSTACK      (-201) /* Reserved: would mean CreateNewProcTags()
+                                        failed to start the client's
+                                        connection subprocess, but
+                                        MQTT_CreateClient() has no error-code
+                                        return channel (it returns APTR,
+                                        bare NULL on every failure including
+                                        this one) - so this code is never
+                                        actually returned by anything today */
 #define MQTTERR_NOTCONNECTED (-202) /* called before MQTT_Connect() succeeded,
                                         or after MQTT_Disconnect() */
 #define MQTTERR_TIMEOUT      (-203) /* MQTT_Publish() at QoS 1: the broker
@@ -138,5 +144,10 @@ struct MqttMessage {
 #define MQTTERR_REFUSED      (-204) /* MQTT_Subscribe(): the broker's SUBACK
                                         granted the subscription a failure
                                         code (0x80) instead of a QoS */
+#define MQTTERR_STATE        (-205) /* MQTT_Connect() called on a handle that
+                                        is already connected (MQTT_Connect()
+                                        already succeeded and neither
+                                        MQTT_Disconnect() nor an unexpected
+                                        drop has happened since) */
 
 #endif /* LIBRARIES_MQTT_H */

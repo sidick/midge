@@ -58,6 +58,10 @@ int host_parse_args(int argc, char **argv, int is_pub, tool_opts *opts)
         fprintf(stderr, "%s: -m or -f is required\n", argv[0]);
         return -1;
     }
+    if (is_pub && opts->message && opts->file) {
+        fprintf(stderr, "%s: -m and -f are mutually exclusive\n", argv[0]);
+        return -1;
+    }
     if (opts->qos > 1) {
         fprintf(stderr, "%s: QoS 2 is not supported (see docs/PROTOCOL.md)\n",
                 argv[0]);

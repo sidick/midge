@@ -10,16 +10,29 @@
  * headroom for the fixed header - see mqtt_packet.h's note on `buf` sizing. */
 #define MQTT_TOOL_BUF_SIZE 8320
 
-static long read_file(const char *path, uint8_t *buf, size_t cap)
+/* Returns the file's length on success, or -1 on failure with *toobig set
+ * when the file is larger than `cap` (refusing a silent truncation).
+ * fread() filling
+ * `buf` to exactly `cap` bytes does NOT itself set the stream's EOF flag -
+ * that only happens once a read is attempted past the actual end of file -
+ * so an exactly-`cap`-byte file must not be mistaken for "too big"; probe
+ * one more byte with fgetc() to tell the two cases apart. */
+static long read_file(const char *path, uint8_t *buf, size_t cap, int *toobig)
 {
     FILE *f = fopen(path, "rb");
     size_t n;
 
+    *toobig = 0;
     if (!f)
         return -1;
     n = fread(buf, 1, cap, f);
-    if (!feof(f)) { /* more data than `cap` - refuse a silent truncation */
+    if (ferror(f)) {
         fclose(f);
+        return -1;
+    }
+    if (n == cap && fgetc(f) != EOF) {
+        fclose(f);
+        *toobig = 1;
         return -1;
     }
     fclose(f);
@@ -42,6 +55,7 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
                 "mqtt_pub: QoS %u publish is not supported in this release "
                 "(outbound QoS 1 lands with mqtt.library); use -q 0\n",
                 (unsigned)opts->qos);
+        transport->close(transport->ctx);
         return 1;
     }
 
@@ -62,10 +76,16 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
     }
 
     if (opts->file) {
-        payload_len = read_file(opts->file, payload, sizeof(payload));
+        int toobig;
+
+        payload_len = read_file(opts->file, payload, sizeof(payload), &toobig);
         if (payload_len < 0) {
-            fprintf(stderr, "mqtt_pub: cannot read %s (or it exceeds %d bytes)\n",
-                    opts->file, MQTT_TOOL_BUF_SIZE);
+            if (toobig)
+                fprintf(stderr, "mqtt_pub: %s exceeds %d bytes\n",
+                        opts->file, MQTT_TOOL_BUF_SIZE);
+            else
+                fprintf(stderr, "mqtt_pub: cannot read %s\n", opts->file);
+            transport->close(transport->ctx);
             return 1;
         }
     } else if (opts->message) {
@@ -73,6 +93,7 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
         if ((size_t)payload_len > sizeof(payload)) {
             fprintf(stderr, "mqtt_pub: message exceeds %d bytes\n",
                     MQTT_TOOL_BUF_SIZE);
+            transport->close(transport->ctx);
             return 1;
         }
         memcpy(payload, opts->message, (size_t)payload_len);
@@ -86,6 +107,7 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
                (unsigned)opts->port);
     if (mqtt_client_connect(&c, tool_now_ms()) != 0) {
         fprintf(stderr, "mqtt_pub: connect failed\n");
+        transport->close(transport->ctx);
         return 1;
     }
 
@@ -96,10 +118,16 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
                             "(code %d, CONNACK %u)\n",
                     mqtt_client_last_error(&c),
                     (unsigned)mqtt_client_connack_code(&c));
+            transport->close(transport->ctx);
             return 1;
         }
-        if (tool_now_ms() > deadline) {
+        /* Wrap-safe elapsed-time compare (now - deadline as a signed
+         * difference of the unsigned subtraction), matching src/core's own
+         * keepalive arithmetic - a plain `now > deadline` misbehaves across
+         * tool_now_ms()'s ~49.7-day uint32 wrap. */
+        if ((int32_t)(tool_now_ms() - deadline) >= 0) {
             fprintf(stderr, "mqtt_pub: timed out waiting for CONNACK\n");
+            transport->close(transport->ctx);
             return 1;
         }
     }
@@ -113,6 +141,7 @@ int mqtt_pub_run(const tool_opts *opts, mqtt_transport *transport)
                              opts->retain) != 0) {
         fprintf(stderr, "mqtt_pub: publish failed (code %d)\n",
                 mqtt_client_last_error(&c));
+        transport->close(transport->ctx);
         return 1;
     }
 

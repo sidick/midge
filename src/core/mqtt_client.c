@@ -112,7 +112,13 @@ int mqtt_client_subscribe(mqtt_client *c, mqtt_str filter, uint8_t qos)
     rc = send_all(c, n);
     if (rc < 0)
         return fail(c, -rc);
+    c->last_subscribe_id = id;
     return 0;
+}
+
+uint16_t mqtt_client_last_subscribe_id(const mqtt_client *c)
+{
+    return c->last_subscribe_id;
 }
 
 void mqtt_client_disconnect(mqtt_client *c)
@@ -179,7 +185,11 @@ int mqtt_client_process(mqtt_client *c, uint32_t now_ms, mqtt_msg_cb cb,
         return 0;
 
     if (c->state == MQTT_CS_CONNECTING) {
-        if (now_ms - c->connect_sent_ms >= c->keepalive_ms)
+        /* keepalive == 0 legitimately disables the keepalive timer
+         * (MQTT 3.1.1); it must not also make the CONNACK wait time out
+         * immediately. */
+        if (c->keepalive_ms > 0 &&
+            now_ms - c->connect_sent_ms >= c->keepalive_ms)
             return fail(c, MQTT_CLIENT_ERR_CONNECT_TIMEOUT);
     } else if (c->state == MQTT_CS_CONNECTED && c->keepalive_ms > 0) {
         if (c->ping_outstanding) {
@@ -202,8 +212,14 @@ int mqtt_client_process(mqtt_client *c, uint32_t now_ms, mqtt_msg_cb cb,
     for (;;) {
         int got = c->transport->recv(c->transport->ctx, c->rxbuf + c->rxlen,
                                       c->rxcap - c->rxlen);
-        if (got < 0)
+        if (got < 0) {
+            /* A broker that refuses the connection and then closes must be
+             * reported as CONNECT_REFUSED, not a generic transport error,
+             * even though the close is what the next recv() sees. */
+            if (c->state == MQTT_CS_CONNECTING && c->connack_code != 0)
+                return fail(c, MQTT_CLIENT_ERR_CONNECT_REFUSED);
             return fail(c, MQTT_CLIENT_ERR_TRANSPORT);
+        }
         if (got == 0)
             break;
         c->rxlen += (size_t)got;
@@ -236,13 +252,27 @@ int mqtt_client_process(mqtt_client *c, uint32_t now_ms, mqtt_msg_cb cb,
 
 uint32_t mqtt_client_next_deadline(const mqtt_client *c)
 {
-    if (c->state == MQTT_CS_CONNECTING)
-        return c->connect_sent_ms + c->keepalive_ms;
-    if (c->state != MQTT_CS_CONNECTED || c->keepalive_ms == 0)
+    uint32_t deadline;
+
+    if (c->state == MQTT_CS_CONNECTING) {
+        /* keepalive == 0 disables the CONNACK-wait timeout too (see
+         * mqtt_client_process()); no deadline to report. */
+        if (c->keepalive_ms == 0)
+            return 0;
+        deadline = c->connect_sent_ms + c->keepalive_ms;
+    } else if (c->state != MQTT_CS_CONNECTED || c->keepalive_ms == 0) {
         return 0;
-    if (c->ping_outstanding)
-        return c->ping_sent_ms + c->keepalive_ms;
-    return c->last_send_ms + (c->keepalive_ms * 3) / 4;
+    } else if (c->ping_outstanding) {
+        deadline = c->ping_sent_ms + c->keepalive_ms;
+    } else {
+        deadline = c->last_send_ms + (c->keepalive_ms * 3) / 4;
+    }
+
+    /* 0 doubles as "no pending deadline"; a computed deadline that happens
+     * to land exactly on the wrapped-clock value 0 must not be mistaken
+     * for that sentinel. 1ms early is harmless (the caller just wakes up
+     * a tick sooner than strictly required). */
+    return deadline == 0 ? 1 : deadline;
 }
 
 mqtt_client_state mqtt_client_get_state(const mqtt_client *c)

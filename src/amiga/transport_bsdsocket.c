@@ -73,10 +73,15 @@ static int bsdsocket_recv(void *ctx, uint8_t *buf, size_t cap)
             c->ctrl_c = 1;
             return -1;
         }
-        /* Interrupted only by break_sigmask signal(s): the caller's own
-         * MsgPort (or whatever break_sigmask names) has something for it -
-         * treat this like a poll timeout so the caller's loop notices. */
-        return 0;
+        if (sigmask & c->break_sigmask)
+            /* Interrupted only by break_sigmask: the caller's own MsgPort
+             * (or whatever break_sigmask names) has something for it -
+             * treat this like a poll timeout so the caller's loop notices. */
+            return 0;
+        /* A genuine WaitSelect() failure (no break signal set at all, e.g.
+         * the TCP stack died under us) - must not be reported as "no data",
+         * or the pump busy-loops at 100% CPU forever. */
+        return -1;
     }
 
     n = recv(c->fd, (char *)buf, (long)cap, 0);

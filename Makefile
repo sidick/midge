@@ -34,7 +34,7 @@ M68K_CFLAGS ?= -std=c99 -O2 -Wall -Wextra -m68020 -noixemul $(CObjINC) -Isrc -Is
 # build"). Computed on the host so the docker targets don't need git inside
 # the container - passed through as plain make variables instead.
 GIT_HASH   ?= $(shell git rev-parse --short HEAD 2>/dev/null)
-GIT_ON_TAG ?= $(shell git describe --tags --exact-match >/dev/null 2>&1 && echo 1)
+GIT_ON_TAG ?= $(shell git describe --tags --exact-match --match 'v*' >/dev/null 2>&1 && echo 1)
 ifneq ($(GIT_ON_TAG),1)
 VERSION_DEFS := -DMIDGE_BUILD_HASH=\"$(GIT_HASH)\"
 endif

@@ -67,6 +67,12 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
             amiga_args_cleanup();
             return -1;
         }
+        if (opts->message && opts->file) {
+            fprintf(stderr,
+                    "mqtt_pub: MESSAGE and FILE are mutually exclusive\n");
+            amiga_args_cleanup();
+            return -1;
+        }
     } else {
         opts->host = (const char *)args[SUB_HOST];
         if (args[SUB_PORT])

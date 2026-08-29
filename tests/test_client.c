@@ -17,6 +17,7 @@ typedef struct {
     size_t inbox_pos;
 
     int closed;
+    int err_when_drained; /* recv() returns -1 once the inbox is empty */
 } fake_conn;
 
 static int fake_send(void *ctx, const uint8_t *buf, size_t len)
@@ -34,7 +35,7 @@ static int fake_recv(void *ctx, uint8_t *buf, size_t cap)
     fake_conn *f = (fake_conn *)ctx;
     size_t avail = f->inbox_len - f->inbox_pos;
     if (avail == 0)
-        return 0;
+        return f->err_when_drained ? -1 : 0;
     if (avail > cap)
         avail = cap;
     memcpy(buf, f->inbox + f->inbox_pos, avail);
@@ -156,6 +157,69 @@ static void test_connect_timeout(void)
     TEST_CHECK(mqtt_client_process(&c, 1000 + 10000, NULL, NULL) ==
                -MQTT_CLIENT_ERR_CONNECT_TIMEOUT);
     TEST_CHECK(mqtt_client_get_state(&c) == MQTT_CS_ERROR);
+}
+
+/* keepalive == 0 legally disables keepalive (MQTT 3.1.1); it must not also
+ * make the CONNACK wait time out immediately, and there must be no pending
+ * deadline to report while CONNECTING with it disabled. */
+static void test_connect_with_keepalive_disabled(void)
+{
+    fake_conn f;
+    mqtt_transport t;
+    mqtt_client c;
+    uint8_t txbuf[128], rxbuf[128];
+    mqtt_connect_opts opts;
+
+    memset(&f, 0, sizeof(f));
+    t.ctx = &f; t.send = fake_send; t.recv = fake_recv; t.close = fake_close;
+    memset(&opts, 0, sizeof(opts));
+    opts.client_id = MQTT_STR("t1");
+    opts.keepalive = 0;
+
+    mqtt_client_init(&c, &t, &opts, txbuf, sizeof(txbuf), rxbuf, sizeof(rxbuf));
+    TEST_CHECK(mqtt_client_connect(&c, 1000) == 0);
+    TEST_CHECK(mqtt_client_next_deadline(&c) == 0);
+
+    /* Long after what a keepalive-timeout would have been, still waiting -
+     * no bogus instant timeout. */
+    TEST_CHECK(mqtt_client_process(&c, 1000 + 60000, NULL, NULL) == 0);
+    TEST_CHECK(mqtt_client_get_state(&c) == MQTT_CS_CONNECTING);
+
+    fake_feed(&f, V_CONNACK_OK, sizeof(V_CONNACK_OK));
+    TEST_CHECK(mqtt_client_process(&c, 1000 + 60000, NULL, NULL) == 0);
+    TEST_CHECK(mqtt_client_get_state(&c) == MQTT_CS_CONNECTED);
+    TEST_CHECK(mqtt_client_next_deadline(&c) == 0);
+}
+
+/* A broker that sends a refusing CONNACK and then closes the connection
+ * must be reported as CONNECT_REFUSED even though the close is what the
+ * next recv() call actually observes. */
+static void test_connect_refused_then_transport_error(void)
+{
+    fake_conn f;
+    mqtt_transport t;
+    mqtt_client c;
+    uint8_t txbuf[128], rxbuf[128];
+    mqtt_connect_opts opts;
+
+    memset(&f, 0, sizeof(f));
+    t.ctx = &f; t.send = fake_send; t.recv = fake_recv; t.close = fake_close;
+    memset(&opts, 0, sizeof(opts));
+    opts.client_id = MQTT_STR("t1");
+    opts.keepalive = 60;
+
+    mqtt_client_init(&c, &t, &opts, txbuf, sizeof(txbuf), rxbuf, sizeof(rxbuf));
+    TEST_CHECK(mqtt_client_connect(&c, 0) == 0);
+
+    fake_feed(&f, V_CONNACK_REFUSED, sizeof(V_CONNACK_REFUSED));
+    /* Once the inbox (the CONNACK) is drained, simulate the broker's close
+     * racing the refusal: the next recv() reports a transport error. */
+    f.err_when_drained = 1;
+
+    TEST_CHECK(mqtt_client_process(&c, 5, NULL, NULL) ==
+               -MQTT_CLIENT_ERR_CONNECT_REFUSED);
+    TEST_CHECK(mqtt_client_get_state(&c) == MQTT_CS_ERROR);
+    TEST_CHECK(mqtt_client_connack_code(&c) == 5);
 }
 
 static void test_partial_packet_reassembly(void)
@@ -401,6 +465,8 @@ void run_client_tests(void)
     test_connect_happy_path();
     test_connect_refused();
     test_connect_timeout();
+    test_connect_with_keepalive_disabled();
+    test_connect_refused_then_transport_error();
     test_partial_packet_reassembly();
     test_keepalive_ping_and_timeout();
     test_keepalive_timeout_without_pingresp();

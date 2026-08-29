@@ -43,15 +43,27 @@
 
 #include "version.h"
 
+/* The library's own AmigaOS version (LibVersion.LibRevision, what
+ * OpenLibrary()'s version argument checks against) is independent of
+ * MIDGE_VERSION (the project release version stamped onto the CLI tools'
+ * $VER, see version.h) - deliberately not tied to it, so the library's ABI
+ * version only bumps when its interface actually changes. LibIdString and
+ * the $VER string below must both spell out LibVersion.LibRevision (here,
+ * "1.0"), per AmigaOS convention - keep all three in sync by hand if
+ * LibVersion/LibRevision ever change. */
 const BYTE LibName[]     = "mqtt.library";
-const BYTE LibIdString[] = "mqtt.library " MIDGE_VERSION " (" MIDGE_VERSION_DATE ")";
+const BYTE LibIdString[] = "mqtt.library 1.0 (" MIDGE_VERSION_DATE ")";
 const UWORD LibVersion   = 1;
 const UWORD LibRevision  = 0;
 
 /* Amiga $VER string - findable by the Shell `Version` command and by
- * `strings` on the binary, same convention as the CLI tools
- * (src/amiga/pub_main.c, src/amiga/sub_main.c). */
-MIDGE_VERSTAG("mqtt.library")
+ * `strings` on the binary. Uses the literal "1.0" (matching
+ * LibVersion.LibRevision above), NOT MIDGE_VERSTAG()'s MIDGE_VERSION (that
+ * macro is for the CLI tools' own project-release $VER, e.g.
+ * src/amiga/pub_main.c - the library's version numbers deliberately don't
+ * track it, see the comment above). */
+static const char verstag[] __attribute__((used)) =
+    "\0$VER: mqtt.library 1.0 (" MIDGE_VERSION_DATE ")";
 
 /* <proto/exec.h> only *declares* `extern struct ExecBase *SysBase;` - as a
  * library (not a program run through libnix's normal crt0/auto-open

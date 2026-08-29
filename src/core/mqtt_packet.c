@@ -66,7 +66,11 @@ static void w_bytes(wbuf *w, const void *p, size_t n)
 {
     if (w->err)
         return;
-    if (n > w->cap - w->pos) { /* avoids pos+n overflow */
+    /* w->pos > w->cap happens when cap is smaller than the offset-5
+     * headroom w_init() starts at; check it before the subtraction below,
+     * which would otherwise underflow (size_t) and let n > cap - pos read
+     * as false, permitting an out-of-bounds memcpy. */
+    if (w->pos > w->cap || n > w->cap - w->pos) {
         w->err = MQTT_ERR_BUFSIZE;
         return;
     }
@@ -98,9 +102,16 @@ static int finish_packet(uint8_t *buf, size_t cap, uint8_t type_flags,
                           size_t content_len)
 {
     uint8_t remlen_buf[4];
-    int remlen_bytes = mqtt_remlen_encode(remlen_buf, (uint32_t)content_len);
+    int remlen_bytes;
     size_t header_len;
 
+    /* content_len is size_t (can be wider than uint32_t on the host);
+     * check before the narrowing cast below so an oversized value is
+     * rejected instead of silently truncated. */
+    if (content_len > MQTT_REMLEN_MAX)
+        return -MQTT_ERR_PROTOCOL;
+
+    remlen_bytes = mqtt_remlen_encode(remlen_buf, (uint32_t)content_len);
     if (remlen_bytes < 0)
         return remlen_bytes;
     header_len = 1 + (size_t)remlen_bytes;
@@ -327,6 +338,8 @@ int mqtt_decode(const uint8_t *buf, size_t avail, mqtt_packet *out)
         if (remlen < 2)
             return -MQTT_ERR_MALFORMED;
         tlen = (uint16_t)((content[0] << 8) | content[1]);
+        if (tlen == 0) /* MQTT-4.7.3-1: topic name must not be empty */
+            return -MQTT_ERR_MALFORMED;
         pos = 2;
         if (pos + tlen > remlen)
             return -MQTT_ERR_MALFORMED;
