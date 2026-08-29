@@ -1,0 +1,6 @@
+==base _MqttBase
+==basetype struct Library *
+==libname mqtt.library
+==bias 30
+==public
+==end

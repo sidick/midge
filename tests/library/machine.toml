@@ -1,0 +1,30 @@
+# Copperline machine profile for midge's headless on-target mqtt.library
+# smoke test. A 68020 (midge's baseline per CLAUDE.md), 2 MB — same shape
+# as tests/copperline/machine.toml, just enough for OpenLibrary/CloseLibrary
+# against the slice 1 library skeleton.
+#
+# The Kickstart ROM is passed as a positional CLI arg (which overrides `rom`
+# here), so this file stays portable across machines. See ../../Makefile
+# `library-smoke` and ./run.sh.
+[cpu]
+model = "68020"
+
+[memory]
+chip = "1M"
+fast = "1M"
+
+[floppy]
+drives = 1 # DF0 wired but left empty; we boot from a host directory
+
+# Boot straight from a host directory. Copperline builds a RAM FFS volume
+# from this tree at start-up and discards writes on exit, so `sys/` is
+# effectively a read-only boot disk. LIBS: auto-assigns to this boot
+# volume's Libs directory, which is where run.sh stages mqtt.library.
+[[filesys]]
+path = "sys"    # resolved relative to this config file's directory
+volume = "MidgeLibTest"
+bootpri = 10    # outranks the (empty) floppy, so this is the boot volume
+
+[emulation]
+power_on = true
+warp_speed = "max" # boot + run as fast as the host allows; this is a batch test
