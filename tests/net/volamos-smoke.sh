@@ -35,13 +35,15 @@ EOF
 mosquitto -c "$OUTDIR/mosquitto.conf" > "$OUTDIR/mosquitto.log" 2>&1 &
 MOSQ_PID=$!
 
+# Wait for the listener (mosquitto has no readiness signal of its own
+# beyond its log line - "/dev/tcp/..." is a bash extension dash (Ubuntu's
+# /bin/sh) doesn't support, so poll the log instead of a raw socket probe).
 i=0
-while ! (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; do
+while ! grep -q "mosquitto version .* running" "$OUTDIR/mosquitto.log" 2>/dev/null; do
     i=$((i + 1))
     [ "$i" -ge 50 ] && { echo "volamos-smoke: mosquitto did not start"; cat "$OUTDIR/mosquitto.log"; exit 1; }
     sleep 0.1
 done
-exec 3<&- 3>&-
 
 "$MQTT_SUB" -h 127.0.0.1 -p "$PORT" -t midge/volamos -C 1 > "$OUTDIR/sub.out" &
 SUB_PID=$!
