@@ -10,16 +10,24 @@ midge is a native MQTT 3.1.1 client for classic AmigaOS, aimed at putting
 your Amiga on a modern smart-home network (Home Assistant, Mosquitto, EMQX)
 - as a display and control surface, and as a publisher of its own telemetry.
 
-This first release ships the command-line tools:
+This release ships:
 
-  mqtt_pub - publish a message to a broker topic
-  mqtt_sub - subscribe to topic filters and print incoming messages
+  mqtt_pub      - publish a message to a broker topic
+  mqtt_sub      - subscribe to topic filters and print incoming messages
+  libs/mqtt.library - a shared library exposing the same MQTT client to
+                       other AmigaOS programs (copy to LIBS: to install)
+  developer/    - mqtt.library's .sfd/.fd/proto/inline/clib headers,
+                   its mqtt.doc autodoc, and two example caller programs
+                   (pubexample.c/subexample.c) for third-party developers
 
-Both follow AmigaDOS conventions (ReadArgs templates, Ctrl-C to stop) and
-speak plain MQTT 3.1.1 over TCP via bsdsocket.library.
+mqtt_pub/mqtt_sub follow AmigaDOS conventions (ReadArgs templates, Ctrl-C
+to stop) and speak plain MQTT 3.1.1 over TCP via bsdsocket.library;
+mqtt.library exposes the same client, plus QoS 1 publish/subscribe and an
+optional auto-reconnect mode, as a normal shared library. See
+https://sidick.github.io/midge/mqtt-library/ for the full mqtt.library
+guide.
 
-Planned for future releases: mqtt.library (a shared library exposing the
-client to other applications), TLS via AmiSSL, and a ReAction dashboard
+Planned for future releases: TLS via AmiSSL, and a ReAction dashboard
 application with Home Assistant MQTT discovery.
 
 Requirements

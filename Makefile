@@ -8,6 +8,7 @@
 #   make net-smoke   on-target network test (Copperline HostSocket; no ROM/WB needed)
 #   make volamos-smoke  same check via volamos - faster local loop, not a CI substitute
 #   make volamos-test-target  codec self-test via volamos - faster local loop
+#   make examples     build the example mqtt.library caller programs (m68k)
 #   make library-smoke  on-target mqtt.library OpenLibrary/CloseLibrary smoke test
 #   make volamos-library-smoke  same check via volamos - faster local loop
 #   make library-net-smoke  on-target mqtt.library end-to-end API test (real broker)
@@ -76,7 +77,7 @@ LIB_SFD     := src/library/mqtt_lib.sfd
 LIB_INCDIR  := $(BUILD)/include
 LIB_GENDIR  := $(BUILD)/library-gen
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke
+.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke examples example-smoke
 
 all: test cli
 
@@ -84,7 +85,7 @@ all: test cli
 # ci.yml calls these five names; each build-test.yml job is independent (no
 # artifact-passing between them). The named targets below (test/cli/m68k/...)
 # stay as the documented local entry points.
-build: m68k library
+build: m68k library examples
 
 test-host: test cli
 
@@ -228,6 +229,24 @@ $(BUILD)/mqtt.library: $(LIB_SRCS) $(CORE_SRCS) src/amiga/transport_bsdsocket.c 
 		$(LIB_GENDIR)/gatestubs.c \
 		-o $@
 
+# --- mqtt.library: example caller programs (developer-facing, shipped in
+# dist's midge/developer/) ---
+# Built exactly as a third-party mqtt.library caller would: -I$(LIB_INCDIR)
+# reaches ONLY <libraries/mqtt.h>/<proto/mqtt.h>/<inline/mqtt.h> (the
+# sfdc-generated caller-side headers, see library-headers above) - the
+# examples' C sources never #include anything from src/. -Isrc is added
+# only so they can pull in src/version.h for their $VER string
+# (MIDGE_VERSTAG, see src/amiga/pub_main.c) - a build-time convenience, not
+# an API dependency; M68K_CFLAGS's other -Isrc* entries are harmless no-ops
+# here since the sources never reference anything under them.
+examples: library-headers $(BUILD)/pubexample $(BUILD)/subexample
+
+$(BUILD)/pubexample: examples/pubexample.c src/version.h $(LIB_INCDIR)/libraries/mqtt.h | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) examples/pubexample.c -o $@
+
+$(BUILD)/subexample: examples/subexample.c src/version.h $(LIB_INCDIR)/libraries/mqtt.h | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) examples/subexample.c -o $@
+
 # --- m68k: on-target codec self-test (run by test-target via Copperline) ---
 codec-selftest-m68k: | $(BUILD)/.dir
 	$(M68K_CC) $(M68K_CFLAGS) -Itests $(CORE_SRCS) tests/copperline/codec_selftest.c -o $(BUILD)/codec_selftest
@@ -298,6 +317,15 @@ libreconn-m68k: library-headers | $(BUILD)/.dir
 library-reconnect-smoke: library libreconn-m68k cli
 	sh tests/library/reconn-run.sh
 
+# --- m68k: on-target check that examples/pubexample.c actually works ---
+# Real Copperline boot (CI/release gate): stages build/pubexample and
+# build/mqtt.library into a throwaway boot volume with Copperline's
+# HostSocket board fitted, runs it against a real scratch Mosquitto with a
+# host mqtt_sub-host observer, and asserts the observer saw the publish -
+# see tests/library/example-run.sh.
+example-smoke: library examples cli
+	sh tests/library/example-run.sh
+
 # --- On-target network smoke: Copperline HostSocket -> host Mosquitto ---
 # No machine-specific assets needed - see tests/net/README.md.
 net-smoke: m68k cli
@@ -345,11 +373,23 @@ dist: build guide $(LHA)
 	@v=$$(sed -n 's/^#define MIDGE_VERSION[[:space:]]*"\(.*\)"$$/\1/p' src/version.h); \
 	for b in mqtt_pub mqtt_sub; do \
 		grep -aqF "\$$VER: $$b $$v (" $(BUILD)/$$b || { echo "dist: $(BUILD)/$$b lacks \"\$$VER: $$b $$v (...)\" - stale build/?"; exit 1; }; \
-	done
+	done; \
+	grep -aqF "\$$VER: mqtt.library $$v (" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library lacks \"\$$VER: mqtt.library $$v (...)\" - stale build/?"; exit 1; }
 	rm -rf $(BUILD)/dist
-	mkdir -p $(BUILD)/dist/midge
+	mkdir -p $(BUILD)/dist/midge/libs $(BUILD)/dist/midge/developer/fd \
+		$(BUILD)/dist/midge/developer/clib $(BUILD)/dist/midge/developer/proto \
+		$(BUILD)/dist/midge/developer/inline $(BUILD)/dist/midge/developer/libraries \
+		$(BUILD)/dist/midge/developer/examples
 	cp $(BUILD)/mqtt_pub $(BUILD)/mqtt_sub $(BUILD)/midge.guide \
 		LICENSE midge.readme $(BUILD)/dist/midge/
+	cp $(BUILD)/mqtt.library $(BUILD)/dist/midge/libs/
+	cp src/library/mqtt_lib.sfd src/library/mqtt.doc $(BUILD)/dist/midge/developer/
+	cp $(LIB_INCDIR)/fd/mqtt_lib.fd $(BUILD)/dist/midge/developer/fd/
+	cp $(LIB_INCDIR)/clib/mqtt_protos.h $(BUILD)/dist/midge/developer/clib/
+	cp $(LIB_INCDIR)/proto/mqtt.h $(BUILD)/dist/midge/developer/proto/
+	cp $(LIB_INCDIR)/inline/mqtt.h $(BUILD)/dist/midge/developer/inline/
+	cp $(LIB_INCDIR)/libraries/mqtt.h $(BUILD)/dist/midge/developer/libraries/
+	cp examples/pubexample.c examples/subexample.c $(BUILD)/dist/midge/developer/examples/
 	cp midge.readme $(BUILD)/dist/
 	cd $(BUILD)/dist && $(abspath $(LHA)) aq midge.lha midge
 	@ls -l $(BUILD)/dist/midge.lha $(BUILD)/dist/midge.readme

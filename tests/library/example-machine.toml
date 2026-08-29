@@ -1,0 +1,28 @@
+# Copperline machine profile for midge's on-target mqtt.library example
+# smoke test (see example-run.sh). Same shape as net-machine.toml (68020,
+# fast RAM, HostSocket board so pubexample's OpenLibrary("mqtt.library")'d
+# connection reaches a real host-side broker).
+[cpu]
+model = "68020"
+
+[memory]
+chip = "1M"
+fast = "8M"
+
+[floppy]
+drives = 1 # DF0 wired but left empty; we boot from a host directory
+
+# Boot straight from a host directory - a separate tree from
+# tests/library/netsys (that one stages libnet; this one stages the
+# pubexample developer example + mqtt.library, see example-run.sh).
+[[filesys]]
+path = "examplesys"
+volume = "MidgeExampleTest"
+bootpri = 10
+
+[hostsocket]
+net = "host"
+
+[emulation]
+power_on = true
+warp_speed = "max"

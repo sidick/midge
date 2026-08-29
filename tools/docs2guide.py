@@ -26,6 +26,7 @@ WIDTH = 76
 PAGES = [
     ('index', 'midge'),
     ('CLI-Reference', 'CLI Reference'),
+    ('mqtt-library', 'mqtt.library'),
 ]
 SLUGS = {slug for slug, _ in PAGES}
 

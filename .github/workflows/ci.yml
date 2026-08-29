@@ -123,6 +123,8 @@ jobs:
         run: PATH=/opt/amiga/bin:$PATH make library-net-smoke
       - name: Run mqtt.library auto-reconnect smoke test
         run: PATH=/opt/amiga/bin:$PATH make library-reconnect-smoke
+      - name: Run mqtt.library example (pubexample) smoke test
+        run: PATH=/opt/amiga/bin:$PATH make example-smoke
 
   docs-build:
     name: Docs site + AmigaGuide build

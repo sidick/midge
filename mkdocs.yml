@@ -41,3 +41,4 @@ markdown_extensions:
 nav:
   - Home: index.md
   - CLI Reference: CLI-Reference.md
+  - mqtt.library: mqtt-library.md

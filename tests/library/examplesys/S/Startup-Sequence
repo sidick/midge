@@ -1,0 +1,4 @@
+; Runs the mqtt.library pubexample developer example end-to-end against
+; the host Mosquitto started by example-run.sh. HOST/PORT/TOPIC/MESSAGE
+; here must match example-run.sh's own constants.
+pubexample 127.0.0.1 18833 midge/example/pub hello-from-pubexample
