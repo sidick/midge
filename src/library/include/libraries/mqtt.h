@@ -64,7 +64,26 @@ struct MqttMessage {
     UBYTE  mm_Retain;          /* the broker's RETAIN flag on this PUBLISH */
 };
 
-/* --- Return / error codes --------------------------------------------------
+/* --- MQTT_Publish() QoS semantics -----------------------------------------
+ * qos 0: MQTT_Publish() returns 0 as soon as the PUBLISH packet has been
+ *        written to the transport - no broker acknowledgement is waited
+ *        for or expected.
+ * qos 1: MQTT_Publish() returns 0 only after the broker's PUBACK for this
+ *        publish arrives. If no PUBACK arrives within ~5s, the same
+ *        PUBLISH is retransmitted with the DUP flag set, up to 3 times
+ *        (so up to 4 sends total, ~15-20s worst case) before giving up and
+ *        returning MQTTERR_TIMEOUT. Because each client handle's commands
+ *        are synchronous, at most one QoS 1 publish is ever outstanding
+ *        per handle - a second MQTT_Publish() call cannot be made until
+ *        the first has returned.
+ * qos 2 is out of scope (see docs/PROTOCOL.md) - MQTT_Publish() rejects it.
+ *
+ * --- MQTT_Subscribe() contract ----------------------------------------------
+ * Returns 0 only after the broker's SUBACK grants the subscription. A
+ * SUBACK return code of 0x80 (refused) yields MQTTERR_REFUSED; no SUBACK
+ * within ~10s yields MQTTERR_TIMEOUT.
+ *
+ * --- Return / error codes --------------------------------------------------
  * 0 (MQTTERR_OK) on success; negative on failure. MQTT_Connect/
  * MQTT_Publish/MQTT_Subscribe pass through src/core's own negative
  * mqtt_err/mqtt_client_err codes where the failure originates there (see
@@ -79,5 +98,14 @@ struct MqttMessage {
                                         the client's connection subprocess */
 #define MQTTERR_NOTCONNECTED (-202) /* called before MQTT_Connect() succeeded,
                                         or after MQTT_Disconnect() */
+#define MQTTERR_TIMEOUT      (-203) /* MQTT_Publish() at QoS 1: the broker
+                                        never sent a PUBACK within the retry
+                                        budget (3 DUP retransmits at ~5s
+                                        intervals, so ~15-20s total).
+                                        MQTT_Subscribe(): no SUBACK arrived
+                                        within ~10s. */
+#define MQTTERR_REFUSED      (-204) /* MQTT_Subscribe(): the broker's SUBACK
+                                        granted the subscription a failure
+                                        code (0x80) instead of a QoS */
 
 #endif /* LIBRARIES_MQTT_H */

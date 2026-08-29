@@ -78,6 +78,7 @@ static void check(int cond, const char *name)
 #define TOPIC_OUT         "midge/lib/out"
 #define RETAINED_PAYLOAD  "hello-from-host-retained"
 #define OUT_PAYLOAD       "hello-from-mqtt-library"
+#define OUT_PAYLOAD_QOS0  "midge-qos0-second-payload"
 
 /* Poll budget for the retained message: ~20s at Delay(10) (0.2s) per try,
  * per the task's "up to ~20s" allowance - generous next to the sub-second
@@ -110,7 +111,11 @@ int main(void)
         goto close_lib;
 
     check(MQTT_Connect(client) == 0, "connect-ok");
-    check(MQTT_Subscribe(client, (STRPTR) TOPIC_IN, 0) == 0, "subscribe-ok");
+    /* Subscribe at QoS 1 (still receives the QoS 0 retained publish below
+     * at delivery QoS 0 - MQTT delivery QoS is min(subscribe qos, publish
+     * qos) - the point here is exercising the SUBACK-wait path added for
+     * this milestone). */
+    check(MQTT_Subscribe(client, (STRPTR) TOPIC_IN, 1) == 0, "subscribe-ok");
 
     for (i = 0; i < POLL_TRIES; i++) {
         msg = MQTT_GetMessage(client);
@@ -131,11 +136,20 @@ int main(void)
         check(0, "message-payload");
     }
 
+    /* QoS 1: MQTT_Publish() only returns 0 once the broker's PUBACK has
+     * actually arrived (see mqtt_funcs.c/libraries/mqtt.h) - a real round
+     * trip against a real broker, not just "encoded and sent". */
     check(MQTT_Publish(client, (STRPTR) TOPIC_OUT, (APTR) OUT_PAYLOAD,
-                        (ULONG) strlen(OUT_PAYLOAD), 0) == 0,
-          "publish-ok");
+                        (ULONG) strlen(OUT_PAYLOAD), 0, 1) == 0,
+          "publish-qos1-ok");
 
-    /* MQTT_Publish() only guarantees the child has encoded+sent by the
+    /* QoS 0: still fire-and-forget - returns once written to the
+     * transport, no broker round trip. */
+    check(MQTT_Publish(client, (STRPTR) TOPIC_OUT, (APTR) OUT_PAYLOAD_QOS0,
+                        (ULONG) strlen(OUT_PAYLOAD_QOS0), 0, 0) == 0,
+          "publish-qos0-ok");
+
+    /* The QoS 0 publish only guarantees the child has encoded+sent by the
      * time it replies (see mqtt_funcs.c) - give the host observer a
      * little slack to actually see it on the wire before we tear the
      * connection down. */

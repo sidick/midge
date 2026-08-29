@@ -55,6 +55,51 @@
 #define MQTT_LIB_TXBUF_SIZE 2048
 #define MQTT_LIB_RXBUF_SIZE 4096
 
+/* Second AllocVec'd tx buffer, used ONLY for QoS 1 PUBLISH encode/retransmit
+ * (see child_run()'s MQTTCMD_PUBLISH handling) - core's own mqtt_client
+ * uses `txbuf` above for CONNECT/SUBSCRIBE/PINGREQ/DISCONNECT/its own QoS 0
+ * publish path, and reusing it here would race the client's next process()
+ * call rebuilding a different packet in the same bytes mid-retransmit-wait. */
+#define MQTT_LIB_TXBUF2_SIZE 2048
+
+/* QoS 1 PUBACK wait/retransmit budget: retransmit with DUP every ~5s, up to
+ * 3 retransmits (4 sends total), then give up - see libraries/mqtt.h. */
+#define MQTT_LIB_PUBACK_RETRY_MS   5000
+#define MQTT_LIB_PUBACK_MAX_RETRIES 3
+
+/* SUBACK wait budget - see libraries/mqtt.h. */
+#define MQTT_LIB_SUBACK_TIMEOUT_MS 10000
+
+/* Safety valve for a transport that persistently would-block inside a
+ * single QoS 1 PUBLISH send, mirroring src/core/mqtt_client.c's own
+ * MQTT_SEND_MAX_SPINS (not exported - core's send_all() is file-static). */
+#define MQTT_LIB_SEND_MAX_SPINS 1000
+
+/* Mirrors src/core/mqtt_client.c's send_all(): loop over transport->send()
+ * until every byte is written. Needed here only because QoS 1 PUBLISH is
+ * encoded and sent directly (core's mqtt_client_publish() only knows QoS 0 -
+ * see mqtt_client.c) - everything else in this file goes through core's own
+ * send_all() indirectly via mqtt_client_publish()/_subscribe()/_process(). */
+static int lib_send_all(mqtt_transport *transport, const uint8_t *buf, int len)
+{
+    size_t sent = 0;
+    int spins = 0;
+
+    while (sent < (size_t)len) {
+        int n = transport->send(transport->ctx, buf + sent, (size_t)len - sent);
+        if (n < 0)
+            return -1;
+        if (n == 0) {
+            if (++spins > MQTT_LIB_SEND_MAX_SPINS)
+                return -1;
+            continue;
+        }
+        sent += (size_t)n;
+        spins = 0;
+    }
+    return 0;
+}
+
 /* --- small helper: deep-copy a caller string into an AllocVec'd buffer --- */
 static STRPTR dupstr(const char *s)
 {
@@ -73,7 +118,12 @@ static STRPTR dupstr(const char *s)
 /* --- mqtt_client_process() callback: one incoming PUBLISH -> one
  * AllocVec'd struct MqttMessage, delivered to the caller's ch_MsgPort. On
  * allocation failure the message is silently dropped, per the task's
- * delivery contract (there is nowhere else to put it). --- */
+ * delivery contract (there is nowhere else to put it).
+ *
+ * Also records PUBACK/SUBACK arrivals into h->ch_Ack* (see mqtt_priv.h) for
+ * the QoS 1 publish-retransmit and SUBACK-wait loops in child_run() below -
+ * those are plain child-local scratch fields, NOT queued as MqttMessages;
+ * a caller never sees an ack packet via MQTT_GetMessage(). --- */
 static void deliver_cb(void *user, const mqtt_packet *pkt)
 {
     MqttClientHandle *h = (MqttClientHandle *)user;
@@ -82,6 +132,20 @@ static void deliver_cb(void *user, const mqtt_packet *pkt)
     STRPTR topic_copy;
     UBYTE *payload_copy;
 
+    if (pkt->type == MQTT_PUBACK) {
+        h->ch_AckType = MQTT_PUBACK;
+        h->ch_AckId = pkt->u.ack.packet_id;
+        h->ch_AckSeen = 1;
+        return;
+    }
+    if (pkt->type == MQTT_SUBACK) {
+        h->ch_AckType = MQTT_SUBACK;
+        h->ch_AckId = pkt->u.suback.packet_id;
+        h->ch_AckCode = (pkt->u.suback.count > 0) ? pkt->u.suback.codes[0]
+                                                    : 0x80;
+        h->ch_AckSeen = 1;
+        return;
+    }
     if (pkt->type != MQTT_PUBLISH)
         return;
 
@@ -117,14 +181,31 @@ static void deliver_cb(void *user, const mqtt_packet *pkt)
  * MQTTCMD_QUIT --- */
 static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
 {
-    uint8_t *txbuf, *rxbuf;
+    uint8_t *txbuf, *rxbuf, *txbuf2;
     bsdsocket_ctx bctx;
     mqtt_transport transport;
     mqtt_client client;
     int have_client = 0;
 
+    /* Child-owned outbound-PUBLISH packet-id counter, starting at 0x8000
+     * and wrapping within 0x8000..0xFFFF - deliberately disjoint from
+     * core's own next_packet_id (mqtt_client.c's alloc_packet_id(), used
+     * for SUBSCRIBE, starts at 1 and wraps 0xFFFF -> 1). Because this
+     * handle's commands are synchronous (do_command() is a blocking round
+     * trip) and each client is one dedicated subprocess, at most one QoS 1
+     * publish is ever outstanding at a time - there is no pending-publish
+     * list here, just this one counter - so picking a disjoint id range is
+     * about defensive clarity (a stray PUBACK for an old SUBSCRIBE-range id
+     * can never be mistaken for a fresh publish ack) rather than strictly
+     * required correctness. This is a local variable, not a file-scope
+     * static: mqtt.library's single data segment (libinit.o) is shared by
+     * every client subprocess, and CLAUDE.md forbids statics that would
+     * break multiple simultaneous connections. */
+    uint16_t next_pub_id = 0x8000;
+
     txbuf = (uint8_t *)AllocVec(MQTT_LIB_TXBUF_SIZE, MEMF_PUBLIC);
     rxbuf = (uint8_t *)AllocVec(MQTT_LIB_RXBUF_SIZE, MEMF_PUBLIC);
+    txbuf2 = (uint8_t *)AllocVec(MQTT_LIB_TXBUF2_SIZE, MEMF_PUBLIC);
 
     for (;;) {
         struct Message *raw;
@@ -140,7 +221,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                 mqtt_connect_opts co;
                 int rc;
 
-                if (!txbuf || !rxbuf) {
+                if (!txbuf || !rxbuf || !txbuf2) {
                     cm->cm_Result = MQTTERR_NOMEM;
                     break;
                 }
@@ -203,9 +284,92 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     cm->cm_Result = MQTTERR_NOTCONNECTED;
                     break;
                 }
-                cm->cm_Result = mqtt_client_publish(
-                    &client, cm->cm_Topic, cm->cm_Payload, cm->cm_PayloadLen,
-                    cm->cm_Retain != 0);
+                if (cm->cm_Qos > 1) {
+                    /* QoS 2 is out of scope - see docs/PROTOCOL.md. */
+                    cm->cm_Result = -(LONG)MQTT_ERR_PROTOCOL;
+                    break;
+                }
+                if (cm->cm_Qos == 0) {
+                    cm->cm_Result = mqtt_client_publish(
+                        &client, cm->cm_Topic, cm->cm_Payload,
+                        cm->cm_PayloadLen, cm->cm_Retain != 0);
+                    break;
+                }
+
+                /* QoS 1: core's mqtt_client_publish() only ever encodes
+                 * QoS 0 (see mqtt_client.c), so this is encoded and sent
+                 * directly here, then retransmitted (dup=1, same packet
+                 * id) from the caller's own cm_Topic/cm_Payload - both
+                 * stay valid for this whole synchronous exchange, so
+                 * there's no need to copy them - every ~5s a PUBACK for
+                 * this packet id doesn't arrive, up to
+                 * MQTT_LIB_PUBACK_MAX_RETRIES times. */
+                {
+                    uint16_t pkt_id = next_pub_id;
+                    int dup = 0;
+                    int attempt;
+                    LONG result = MQTTERR_TIMEOUT;
+
+                    next_pub_id = (next_pub_id == 0xFFFF)
+                                      ? (uint16_t)0x8000
+                                      : (uint16_t)(next_pub_id + 1);
+
+                    for (attempt = 0; attempt <= MQTT_LIB_PUBACK_MAX_RETRIES;
+                         attempt++, dup = 1) {
+                        int n;
+                        uint32_t wait_start;
+                        int done = 0;
+
+                        n = mqtt_encode_publish(
+                            txbuf2, MQTT_LIB_TXBUF2_SIZE, cm->cm_Topic,
+                            cm->cm_Payload, cm->cm_PayloadLen, 1,
+                            cm->cm_Retain != 0, dup, pkt_id);
+                        if (n < 0) {
+                            result = (LONG)n;
+                            break;
+                        }
+                        if (lib_send_all(&transport, txbuf2, n) != 0) {
+                            result = MQTTERR_NOTCONNECTED;
+                            transport.close(transport.ctx);
+                            have_client = 0;
+                            break;
+                        }
+
+                        h->ch_AckSeen = 0;
+                        /* Wrap-safe elapsed-time idiom (now - start >=
+                         * timeout, unsigned), matching src/core's own
+                         * keepalive arithmetic - an absolute deadline
+                         * compare would misbehave across tool_now_ms()'s
+                         * ~49.7-day uint32 wrap. */
+                        wait_start = tool_now_ms();
+                        for (;;) {
+                            int rc = mqtt_client_process(&client,
+                                                          tool_now_ms(),
+                                                          deliver_cb, h);
+                            if (rc != 0) {
+                                result = (LONG)rc;
+                                transport.close(transport.ctx);
+                                have_client = 0;
+                                done = 1;
+                                break;
+                            }
+                            if (h->ch_AckSeen &&
+                                h->ch_AckType == MQTT_PUBACK &&
+                                h->ch_AckId == pkt_id) {
+                                result = 0;
+                                done = 1;
+                                break;
+                            }
+                            if (tool_now_ms() - wait_start >=
+                                MQTT_LIB_PUBACK_RETRY_MS)
+                                break; /* retransmit, or give up if this
+                                          was the last attempt */
+                        }
+                        if (done)
+                            break;
+                    }
+                    cm->cm_Result = result;
+                }
                 break;
 
             case MQTTCMD_SUBSCRIBE:
@@ -213,8 +377,52 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     cm->cm_Result = MQTTERR_NOTCONNECTED;
                     break;
                 }
-                cm->cm_Result =
-                    mqtt_client_subscribe(&client, cm->cm_Topic, cm->cm_Qos);
+                {
+                    LONG result = (LONG)mqtt_client_subscribe(
+                        &client, cm->cm_Topic, cm->cm_Qos);
+
+                    if (result == 0) {
+                        uint32_t wait_start;
+
+                        /* Core allocates the SUBSCRIBE's packet id
+                         * internally (alloc_packet_id() is file-static in
+                         * mqtt_client.c) and mqtt_client_subscribe() has no
+                         * output parameter for it, so it can't be matched
+                         * exactly without a further core change. Because
+                         * do_command() is synchronous and this handle's
+                         * child only ever has one SUBSCRIBE outstanding at
+                         * a time, matching on "any SUBACK" is sound here -
+                         * see the task notes for this deliberate deviation
+                         * from packet-id matching. */
+                        h->ch_AckSeen = 0;
+                        /* Wrap-safe elapsed-time idiom - see the QoS 1
+                         * PUBACK wait above. */
+                        wait_start = tool_now_ms();
+                        result = MQTTERR_TIMEOUT;
+                        for (;;) {
+                            int rc = mqtt_client_process(&client,
+                                                          tool_now_ms(),
+                                                          deliver_cb, h);
+                            if (rc != 0) {
+                                result = (LONG)rc;
+                                transport.close(transport.ctx);
+                                have_client = 0;
+                                break;
+                            }
+                            if (h->ch_AckSeen &&
+                                h->ch_AckType == MQTT_SUBACK) {
+                                result = (h->ch_AckCode == 0x80)
+                                             ? (LONG)MQTTERR_REFUSED
+                                             : 0;
+                                break;
+                            }
+                            if (tool_now_ms() - wait_start >=
+                                MQTT_LIB_SUBACK_TIMEOUT_MS)
+                                break;
+                        }
+                    }
+                    cm->cm_Result = result;
+                }
                 break;
 
             case MQTTCMD_DISCONNECT:
@@ -236,6 +444,8 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     FreeVec(txbuf);
                 if (rxbuf)
                     FreeVec(rxbuf);
+                if (txbuf2)
+                    FreeVec(txbuf2);
 
                 /* Defensive: reply anything else queued behind Quit so no
                  * caller is left waiting forever. In practice there
@@ -507,7 +717,7 @@ LONG MQTT_Connect(struct Library *_base, APTR client)
 }
 
 LONG MQTT_Publish(struct Library *_base, APTR client, STRPTR topic,
-                   APTR payload, ULONG len, LONG retain)
+                   APTR payload, ULONG len, LONG retain, UBYTE qos)
 {
     MqttClientHandle *h = (MqttClientHandle *)client;
     mqtt_str t;
@@ -517,12 +727,14 @@ LONG MQTT_Publish(struct Library *_base, APTR client, STRPTR topic,
         return MQTTERR_NOTCONNECTED;
     if (!topic)
         return -(LONG)MQTT_ERR_PROTOCOL;
+    if (qos > 1) /* QoS 2 is out of scope - see docs/PROTOCOL.md */
+        return -(LONG)MQTT_ERR_PROTOCOL;
 
     t.ptr = (const char *)topic;
     t.len = (uint16_t)strlen((const char *)topic);
 
     return do_command(h, MQTTCMD_PUBLISH, t, (const UBYTE *)payload, len,
-                       retain, 0);
+                       retain, qos);
 }
 
 LONG MQTT_Subscribe(struct Library *_base, APTR client, STRPTR filter,

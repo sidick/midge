@@ -27,6 +27,10 @@ static void on_publish(void *user, const mqtt_packet *pkt)
 {
     sub_ctx *s = (sub_ctx *)user;
 
+    if (pkt->type != MQTT_PUBLISH)
+        return; /* core's cb also fires for ack-class packets now - this
+                    tool only ever cared about deliveries */
+
     if (s->verbose)
         printf("%.*s ", (int)pkt->u.publish.topic.len, pkt->u.publish.topic.ptr);
     fwrite(pkt->u.publish.payload, 1, pkt->u.publish.payload_len, stdout);

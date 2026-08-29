@@ -36,6 +36,7 @@ TOPIC_IN=midge/lib/in
 TOPIC_OUT=midge/lib/out
 RETAINED_PAYLOAD=hello-from-host-retained
 OUT_PAYLOAD=hello-from-mqtt-library
+OUT_PAYLOAD_QOS0=midge-qos0-second-payload
 BENCH=${BENCH:-60} # emulated seconds: AROS boot (~10s) + up to ~20s poll budget
 
 command -v "$COPPERLINE" >/dev/null || { echo "FAIL: $COPPERLINE not found" >&2; exit 2; }
@@ -78,7 +79,7 @@ done
 # republish loop needed.
 "$MQTT_PUB" -h 127.0.0.1 -p "$PORT" -t "$TOPIC_IN" -m "$RETAINED_PAYLOAD" -r
 
-"$MQTT_SUB" -h 127.0.0.1 -p "$PORT" -t "$TOPIC_OUT" -C 1 > "$OUTDIR/sub.out" 2>"$OUTDIR/sub.err" &
+"$MQTT_SUB" -h 127.0.0.1 -p "$PORT" -t "$TOPIC_OUT" -C 2 > "$OUTDIR/sub.out" 2>"$OUTDIR/sub.err" &
 SUB_PID=$!
 sleep 0.3
 
@@ -97,6 +98,10 @@ grep -q '^FAIL ' "$OUT" && { echo "FAIL: one or more mqtt.library checks failed 
 grep -q '^RESULT=OK$' "$OUT" || { echo "FAIL: no RESULT=OK marker" >&2; exit 1; }
 grep -qF "$OUT_PAYLOAD" "$OUTDIR/sub.out" || {
     echo "FAIL: host observer never saw \"$OUT_PAYLOAD\" on $TOPIC_OUT" >&2
+    exit 1
+}
+grep -qF "$OUT_PAYLOAD_QOS0" "$OUTDIR/sub.out" || {
+    echo "FAIL: host observer never saw \"$OUT_PAYLOAD_QOS0\" on $TOPIC_OUT" >&2
     exit 1
 }
 

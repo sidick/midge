@@ -93,6 +93,24 @@ typedef struct MqttClientHandle {
     STRPTR ch_ClientID;
     STRPTR ch_Username;
     STRPTR ch_Password;
+
+    /* --- QoS 1 publish / SUBACK-wait scratch state -------------------------
+     * Written by deliver_cb() (called from inside the CHILD subprocess's own
+     * mqtt_client_process() pump) whenever it sees an acknowledgement-class
+     * packet; read back by that same child subprocess's command handlers
+     * (MQTTCMD_PUBLISH/MQTTCMD_SUBSCRIBE in mqtt_funcs.c's child_run()) right
+     * after each process() call, in the same task. Never touched by the
+     * caller's task - at most one command is ever in flight per handle
+     * (do_command() is a synchronous round trip), so there is no concurrent
+     * access to guard against. Cleared by the child before each wait loop
+     * that uses them. */
+    int    ch_AckSeen;  /* set by deliver_cb() when it records a fresh ack */
+    UBYTE  ch_AckType;  /* MQTT_PUBACK or MQTT_SUBACK (mqtt_packet.h) */
+    UWORD  ch_AckId;    /* the ack's packet id */
+    UBYTE  ch_AckCode;  /* SUBACK: pkt->u.suback.codes[0] (this library only
+                            ever subscribes one filter per SUBSCRIBE, so the
+                            first grant code is the whole answer); unused for
+                            PUBACK */
 } MqttClientHandle;
 
 #endif /* MIDGE_MQTT_PRIV_H */

@@ -99,11 +99,17 @@ void mqtt_client_disconnect(mqtt_client *c);
 
 /* Drains available inbound bytes, advances the state machine (CONNACK,
  * PINGRESP, auto-PUBACK of incoming QoS 1 messages), invokes `cb` once per
- * PUBLISH delivered to the caller, and handles keepalive PINGREQ scheduling
- * and CONNACK/PINGRESP timeout detection against `now_ms`. Returns 0, or a
- * negative mqtt_err/mqtt_client_err (also latched via last_error and a
- * transition to MQTT_CS_ERROR). Safe to call from CONNECTING or CONNECTED
- * state; a no-op in DISCONNECTED/ERROR. */
+ * PUBLISH delivered to the caller AND once per received acknowledgement-
+ * class packet (PUBACK/PUBREC/PUBREL/PUBCOMP/SUBACK/UNSUBACK - core does no
+ * bookkeeping of its own for these; a caller that wants to match them
+ * against an outstanding QoS 1 publish or SUBSCRIBE must do so itself, e.g.
+ * mqtt.library's subprocess, see docs/ARCHITECTURE.md), and handles
+ * keepalive PINGREQ scheduling and CONNACK/PINGRESP timeout detection
+ * against `now_ms`. Callers that only want deliveries must filter on
+ * pkt->type == MQTT_PUBLISH themselves. Returns 0, or a negative
+ * mqtt_err/mqtt_client_err (also latched via last_error and a transition to
+ * MQTT_CS_ERROR). Safe to call from CONNECTING or CONNECTED state; a no-op
+ * in DISCONNECTED/ERROR. */
 int mqtt_client_process(mqtt_client *c, uint32_t now_ms, mqtt_msg_cb cb,
                          void *user);
 

@@ -158,8 +158,16 @@ static void handle_packet(mqtt_client *c, const mqtt_packet *pkt,
         break;
 
     default:
-        /* PUBACK/PUBREC/PUBREL/PUBCOMP/SUBACK/UNSUBACK: no bookkeeping yet
-         * in this v1 (no outbound QoS 1, no subscribe-state tracking). */
+        /* PUBACK/PUBREC/PUBREL/PUBCOMP/SUBACK/UNSUBACK: no bookkeeping here
+         * (no outbound QoS 1 state, no subscribe-state tracking in core -
+         * that lives in the mqtt.library subprocess, see
+         * docs/ARCHITECTURE.md). Still surfaced to the caller's callback so
+         * it can observe acknowledgements (e.g. to implement QoS 1
+         * publish-with-retransmit or SUBACK matching above this layer);
+         * callers that only care about deliveries must filter on
+         * pkt->type == MQTT_PUBLISH themselves. */
+        if (cb)
+            cb(user, pkt);
         break;
     }
 }

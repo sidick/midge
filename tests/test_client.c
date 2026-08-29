@@ -317,6 +317,68 @@ static void test_publish_delivery_and_qos1_autoack(void)
     TEST_CHECK(memcmp(f.sent, V_PUBACK, sizeof(V_PUBACK)) == 0);
 }
 
+static int g_ack_calls;
+static uint8_t g_ack_type;
+static uint16_t g_ack_id;
+static uint8_t g_ack_suback_count;
+static uint8_t g_ack_suback_code;
+
+static void record_acks(void *user, const mqtt_packet *pkt)
+{
+    (void)user;
+    if (pkt->type == MQTT_PUBLISH)
+        return;
+    g_ack_calls++;
+    g_ack_type = pkt->type;
+    if (pkt->type == MQTT_SUBACK) {
+        g_ack_id = pkt->u.suback.packet_id;
+        g_ack_suback_count = (uint8_t)pkt->u.suback.count;
+        g_ack_suback_code = pkt->u.suback.codes[0];
+    } else {
+        g_ack_id = pkt->u.ack.packet_id;
+    }
+}
+
+/* PUBACK/SUBACK now surface through cb (with correct type + packet id) so a
+ * caller layered above core (mqtt.library's subprocess) can implement
+ * QoS 1 publish-with-retransmit and SUBACK matching without core itself
+ * tracking any of that state - see mqtt_client.h's process() doc comment. */
+static void test_ack_packets_surface_through_cb(void)
+{
+    fake_conn f;
+    mqtt_transport t;
+    mqtt_client c;
+    uint8_t txbuf[128], rxbuf[128];
+
+    connect_and_accept(&c, &f, &t, txbuf, sizeof(txbuf), rxbuf, sizeof(rxbuf), 60);
+
+    g_ack_calls = 0;
+    fake_feed(&f, V_PUBACK, sizeof(V_PUBACK));
+    TEST_CHECK(mqtt_client_process(&c, 2, record_acks, NULL) == 0);
+    TEST_CHECK(g_ack_calls == 1);
+    TEST_CHECK(g_ack_type == MQTT_PUBACK);
+    TEST_CHECK(g_ack_id == 0x0007);
+
+    g_ack_calls = 0;
+    fake_feed(&f, V_SUBACK, sizeof(V_SUBACK));
+    TEST_CHECK(mqtt_client_process(&c, 3, record_acks, NULL) == 0);
+    TEST_CHECK(g_ack_calls == 1);
+    TEST_CHECK(g_ack_type == MQTT_SUBACK);
+    TEST_CHECK(g_ack_id == 0x000A);
+    TEST_CHECK(g_ack_suback_count == 1);
+    TEST_CHECK(g_ack_suback_code == 0x01);
+
+    /* Existing PUBLISH delivery behaviour is unchanged: a PUBLISH still
+     * reaches a callback that only looks at pkt->type == MQTT_PUBLISH, and
+     * does NOT bump the ack counter. */
+    g_cb_calls = 0;
+    g_ack_calls = 0;
+    fake_feed(&f, V_PUBLISH_QOS0, sizeof(V_PUBLISH_QOS0));
+    TEST_CHECK(mqtt_client_process(&c, 4, record_publish, NULL) == 0);
+    TEST_CHECK(g_cb_calls == 1);
+    TEST_CHECK(g_ack_calls == 0);
+}
+
 static void test_disconnect_sends_disconnect_and_closes(void)
 {
     fake_conn f;
@@ -345,5 +407,6 @@ void run_client_tests(void)
     test_publish_and_subscribe_require_connected();
     test_subscribe_encodes_incrementing_packet_ids();
     test_publish_delivery_and_qos1_autoack();
+    test_ack_packets_surface_through_cb();
     test_disconnect_sends_disconnect_and_closes();
 }
