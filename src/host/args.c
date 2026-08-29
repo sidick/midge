@@ -1,3 +1,9 @@
+/* glibc hides getopt/optind/optarg (POSIX.1-2001) under a strict -std=c99
+ * build unless a feature-test macro says otherwise; must be defined before
+ * the first system header - see transport_bsd.c's longer note (same root
+ * cause, same CI-only failure on Linux, not local macOS development). */
+#define _POSIX_C_SOURCE 200112L
+
 #include "args.h"
 
 #include <stdio.h>

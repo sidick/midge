@@ -1,4 +1,12 @@
 /* transport_bsd.c — BSD-socket mqtt_transport for host builds. */
+
+/* glibc hides struct addrinfo/getaddrinfo/freeaddrinfo (POSIX.1-2001) under
+ * a strict -std=c99 build unless a feature-test macro says otherwise; must
+ * be defined before the first system header. macOS's libc exposes these
+ * unconditionally, which is why this only broke in CI (Linux), not local
+ * development on macOS - a lesson for any future host-only #include. */
+#define _POSIX_C_SOURCE 200112L
+
 #include "transport_bsd.h"
 
 #include <errno.h>
@@ -7,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
