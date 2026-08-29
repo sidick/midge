@@ -3,6 +3,7 @@
 #   make test        build and run the host-side unit tests (default)
 #   make cli         build the host-native mqtt_pub/mqtt_sub tools
 #   make broker-smoke  run the host tools against a local Mosquitto
+#   make broker-tls-smoke  run the host tools' TLS support against a local Mosquitto
 #   make m68k        cross-build the Amiga binaries (needs amiga-gcc on PATH)
 #   make m68k-docker cross-build inside the CI container (no local toolchain)
 #   make net-smoke   on-target network test (Copperline HostSocket; no ROM/WB needed)
@@ -22,6 +23,34 @@
 CC      ?= cc
 CFLAGS  ?= -std=c99 -O2 -Wall -Wextra
 CObjINC := -Isrc/core
+
+# Host TLS transport (src/host/transport_openssl.c) links host OpenSSL
+# 1.1+/3.x. Not on the default compiler search path on macOS (Homebrew
+# keeps it out of /usr/include and /usr/lib to avoid shadowing the system
+# LibreSSL), so go through pkg-config; fall back to plain -lssl -lcrypto for
+# hosts where OpenSSL is where the compiler already expects it.
+HOST_SSL_CFLAGS ?= $(shell pkg-config --cflags openssl 2>/dev/null)
+HOST_SSL_LIBS   ?= $(shell pkg-config --libs openssl 2>/dev/null || echo -lssl -lcrypto)
+
+# Feature-detect OpenSSL rather than requiring it unconditionally: the
+# shared amiga-dev CI image (ci/test-host, ci/build - see
+# .github/workflows/ci.yml) has no OpenSSL headers and this repo has no way
+# to add an apt-get step to those reusable-workflow jobs, so `cli`/`test`
+# must still build cleanly there, just without TLS support in that build.
+# Same idiom AmiSSL will use for the m68k side (see issue #3's plan) -
+# amiauth's own `make diff` target follows the sibling precedent of keeping
+# an optional host OpenSSL dependency out of its core build/test verbs
+# entirely; this goes one step further and degrades gracefully instead,
+# since -s/-S need to be real flags on the shipped mqtt_pub-host/
+# mqtt_sub-host binaries (broker-tls-smoke's job installs libssl-dev, or
+# gets it for free on a stock ubuntu-latest runner, so it always gets full
+# TLS support).
+HOST_HAS_TLS := $(shell $(CC) $(HOST_SSL_CFLAGS) -c -include openssl/ssl.h -x c /dev/null -o /dev/null >/dev/null 2>&1 && echo 1)
+ifeq ($(HOST_HAS_TLS),1)
+HOST_TLS_SRCS   := src/host/transport_openssl.c
+HOST_TLS_CFLAGS := $(HOST_SSL_CFLAGS) -DMIDGE_HOST_TLS
+HOST_TLS_LIBS   := $(HOST_SSL_LIBS)
+endif
 
 # --- m68k cross toolchain (Amiga build) ---
 # Baseline per the project spec is 68020 (not 68000 - see CLAUDE.md).
@@ -49,7 +78,7 @@ DOCKER_USER     := --user "$(shell id -u):$(shell id -g)"
 
 CORE_SRCS  := $(wildcard src/core/*.c)
 TOOLS_SRCS := $(wildcard src/tools/*.c)
-HOST_SRCS  := src/host/transport_bsd.c src/host/args.c src/host/clock.c
+HOST_SRCS  := src/host/transport_bsd.c $(HOST_TLS_SRCS) src/host/args.c src/host/clock.c
 AMIGA_SRCS := src/amiga/transport_bsdsocket.c src/amiga/args.c src/amiga/clock.c
 LIB_SRCS   := $(wildcard src/library/*.c)
 TEST_SRCS  := $(wildcard tests/test_*.c)
@@ -77,7 +106,7 @@ LIB_SFD     := src/library/mqtt_lib.sfd
 LIB_INCDIR  := $(BUILD)/include
 LIB_GENDIR  := $(BUILD)/library-gen
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide api-reference dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke examples example-smoke
+.PHONY: all test cli broker-smoke broker-tls-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide api-reference dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke examples example-smoke
 
 all: test cli
 
@@ -113,15 +142,19 @@ $(BUILD)/run-tests: $(CORE_SRCS) $(TEST_SRCS) $(CORE_HDRS) $(TEST_HDRS) | $(BUIL
 cli: $(BUILD)/mqtt_pub-host $(BUILD)/mqtt_sub-host
 
 $(BUILD)/mqtt_pub-host: $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c $(CORE_HDRS) $(TOOLS_HDRS) $(HOST_HDRS) | $(BUILD)/.dir
-	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c -o $@
+	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_TLS_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c -o $@ $(HOST_TLS_LIBS)
 
 $(BUILD)/mqtt_sub-host: $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c $(CORE_HDRS) $(TOOLS_HDRS) $(HOST_HDRS) | $(BUILD)/.dir
-	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c -o $@
+	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_TLS_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c -o $@ $(HOST_TLS_LIBS)
 
 # --- Host: end-to-end smoke test against a local Mosquitto ---
 broker-smoke: cli
 	MQTT_PUB=$(BUILD)/mqtt_pub-host MQTT_SUB=$(BUILD)/mqtt_sub-host \
 		sh tests/broker/smoke.sh
+
+broker-tls-smoke: cli
+	MQTT_PUB=$(BUILD)/mqtt_pub-host MQTT_SUB=$(BUILD)/mqtt_sub-host \
+		sh tests/broker/tls-smoke.sh
 
 # --- m68k: Amiga binaries (amiga-gcc on PATH) ---
 # Four binaries: mqtt_pub/mqtt_sub are the default, library-linked tools

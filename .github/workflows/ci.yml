@@ -9,8 +9,10 @@ name: CI
 # something a shared workflow should know about) and its outputs feed
 # build-test.yml's run-* inputs directly, preserving the path-based
 # skip-on-docs-only-PR behavior. `broker-smoke` (host CLI tools against a
-# real Mosquitto), `net-smoke` (cross-built mqtt_pub under Copperline's
-# HostSocket board against a real Mosquitto - see tests/net/README.md),
+# real Mosquitto), `broker-tls-smoke` (same, over a Mosquitto TLS listener
+# - gated by the same `broker` filter), `net-smoke` (cross-built mqtt_pub
+# under Copperline's HostSocket board against a real Mosquitto - see
+# tests/net/README.md),
 # `library-smoke` (mqtt.library opened and driven on-target - the plain
 # OpenLibrary/CloseLibrary check, the full API against a real Mosquitto, and
 # the mco_AutoReconnect backoff/auto-resubscribe check across a broker
@@ -92,6 +94,18 @@ jobs:
       - name: Run broker smoke test
         run: make broker-smoke
 
+  broker-tls-smoke:
+    name: Broker TLS smoke (host CLIs vs Mosquitto, TLS listener)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.broker == 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Mosquitto
+        run: sudo apt-get update && sudo apt-get install -y mosquitto mosquitto-clients
+      - name: Run broker TLS smoke test
+        run: make broker-tls-smoke
+
   net-smoke:
     name: Net smoke (on-target mqtt_pub vs Mosquitto, Copperline HostSocket)
     runs-on: ubuntu-latest
@@ -101,7 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install Mosquitto
-        run: apt-get update && apt-get install -y mosquitto
+        run: apt-get update && apt-get install -y mosquitto libssl-dev pkg-config
       - name: Cross-build mqtt_pub, mqtt.library, and the host observer
         run: PATH=/opt/amiga/bin:$PATH make m68k library cli
       - name: Run net smoke test
@@ -116,7 +130,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install Mosquitto
-        run: apt-get update && apt-get install -y mosquitto
+        run: apt-get update && apt-get install -y mosquitto libssl-dev pkg-config
       - name: Run mqtt.library open/close smoke test
         run: PATH=/opt/amiga/bin:$PATH make library-smoke
       - name: Run mqtt.library end-to-end API smoke test

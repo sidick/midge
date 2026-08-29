@@ -13,7 +13,8 @@
 
 typedef struct {
     const char *host;
-    uint16_t port;      /* default 1883 */
+    uint16_t port;      /* default 1883 plaintext, 8883 with TLS; parsers
+                            leave 0 until resolved after the option loop */
     const char *topic;
     const char *message; /* mqtt_pub: literal payload; NULL if using `file` */
     const char *file;    /* mqtt_pub: read payload from this file instead */
@@ -26,6 +27,9 @@ typedef struct {
     int retain;             /* mqtt_pub only */
     int verbose;
     int count;              /* mqtt_sub only; <= 0 means unlimited */
+    int tls;                /* opt-in, never default-on (see issue #3) */
+    int tls_insecure;       /* skip certificate verification; ignored
+                                without tls */
 } tool_opts;
 
 /* Connects (assumes `transport` is already connected to the broker),

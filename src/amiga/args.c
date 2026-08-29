@@ -8,19 +8,20 @@
 
 #define PUB_TEMPLATE                                                       \
     "HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,"  \
-    "PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S"
+    "PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S,TLS/S,TLSINSECURE/S"
 #define SUB_TEMPLATE                                                       \
     "HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,"        \
-    "KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S"
+    "KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S,TLS/S,TLSINSECURE/S"
 
 enum {
     PUB_HOST, PUB_PORT, PUB_TOPIC, PUB_MESSAGE, PUB_FILE, PUB_QOS,
     PUB_CLIENTID, PUB_USER, PUB_PASSWORD, PUB_KEEPALIVE, PUB_RETAIN,
-    PUB_VERBOSE, PUB_NARGS
+    PUB_VERBOSE, PUB_TLS, PUB_TLSINSECURE, PUB_NARGS
 };
 enum {
     SUB_HOST, SUB_PORT, SUB_TOPIC, SUB_QOS, SUB_CLIENTID, SUB_USER,
-    SUB_PASSWORD, SUB_KEEPALIVE, SUB_COUNT, SUB_VERBOSE, SUB_NARGS
+    SUB_PASSWORD, SUB_KEEPALIVE, SUB_COUNT, SUB_VERBOSE, SUB_TLS,
+    SUB_TLSINSECURE, SUB_NARGS
 };
 
 static struct RDArgs *g_rdargs;
@@ -33,7 +34,8 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
     int i;
 
     memset(opts, 0, sizeof(*opts));
-    opts->port = 1883;
+    /* opts->port stays 0 (memset) until resolved after parsing, once we
+     * know whether TLS/TLSINSECURE was given. */
     opts->keepalive = 60;
 
     for (i = 0; i < nargs; i++)
@@ -61,6 +63,10 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
             opts->keepalive = (uint16_t)*(LONG *)args[PUB_KEEPALIVE];
         opts->retain = args[PUB_RETAIN] ? 1 : 0;
         opts->verbose = args[PUB_VERBOSE] ? 1 : 0;
+        opts->tls = args[PUB_TLS] ? 1 : 0;
+        opts->tls_insecure = args[PUB_TLSINSECURE] ? 1 : 0;
+        if (opts->tls_insecure)
+            opts->tls = 1;
 
         if (!opts->message && !opts->file) {
             fprintf(stderr, "mqtt_pub: MESSAGE or FILE is required\n");
@@ -88,7 +94,14 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
         if (args[SUB_COUNT])
             opts->count = (int)*(LONG *)args[SUB_COUNT];
         opts->verbose = args[SUB_VERBOSE] ? 1 : 0;
+        opts->tls = args[SUB_TLS] ? 1 : 0;
+        opts->tls_insecure = args[SUB_TLSINSECURE] ? 1 : 0;
+        if (opts->tls_insecure)
+            opts->tls = 1;
     }
+
+    if (opts->port == 0)
+        opts->port = opts->tls ? 8883 : 1883;
 
     if (opts->qos > 1) {
         fprintf(stderr, "midge: QoS 2 is not supported (see docs/PROTOCOL.md)\n");
