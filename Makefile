@@ -32,6 +32,26 @@ CObjINC := -Isrc/core
 HOST_SSL_CFLAGS ?= $(shell pkg-config --cflags openssl 2>/dev/null)
 HOST_SSL_LIBS   ?= $(shell pkg-config --libs openssl 2>/dev/null || echo -lssl -lcrypto)
 
+# Feature-detect OpenSSL rather than requiring it unconditionally: the
+# shared amiga-dev CI image (ci/test-host, ci/build - see
+# .github/workflows/ci.yml) has no OpenSSL headers and this repo has no way
+# to add an apt-get step to those reusable-workflow jobs, so `cli`/`test`
+# must still build cleanly there, just without TLS support in that build.
+# Same idiom AmiSSL will use for the m68k side (see issue #3's plan) -
+# amiauth's own `make diff` target follows the sibling precedent of keeping
+# an optional host OpenSSL dependency out of its core build/test verbs
+# entirely; this goes one step further and degrades gracefully instead,
+# since -s/-S need to be real flags on the shipped mqtt_pub-host/
+# mqtt_sub-host binaries (broker-tls-smoke's job installs libssl-dev, or
+# gets it for free on a stock ubuntu-latest runner, so it always gets full
+# TLS support).
+HOST_HAS_TLS := $(shell $(CC) $(HOST_SSL_CFLAGS) -c -include openssl/ssl.h -x c /dev/null -o /dev/null >/dev/null 2>&1 && echo 1)
+ifeq ($(HOST_HAS_TLS),1)
+HOST_TLS_SRCS   := src/host/transport_openssl.c
+HOST_TLS_CFLAGS := $(HOST_SSL_CFLAGS) -DMIDGE_HOST_TLS
+HOST_TLS_LIBS   := $(HOST_SSL_LIBS)
+endif
+
 # --- m68k cross toolchain (Amiga build) ---
 # Baseline per the project spec is 68020 (not 68000 - see CLAUDE.md).
 M68K_CC     ?= m68k-amigaos-gcc
@@ -58,7 +78,7 @@ DOCKER_USER     := --user "$(shell id -u):$(shell id -g)"
 
 CORE_SRCS  := $(wildcard src/core/*.c)
 TOOLS_SRCS := $(wildcard src/tools/*.c)
-HOST_SRCS  := src/host/transport_bsd.c src/host/transport_openssl.c src/host/args.c src/host/clock.c
+HOST_SRCS  := src/host/transport_bsd.c $(HOST_TLS_SRCS) src/host/args.c src/host/clock.c
 AMIGA_SRCS := src/amiga/transport_bsdsocket.c src/amiga/args.c src/amiga/clock.c
 LIB_SRCS   := $(wildcard src/library/*.c)
 TEST_SRCS  := $(wildcard tests/test_*.c)
@@ -122,10 +142,10 @@ $(BUILD)/run-tests: $(CORE_SRCS) $(TEST_SRCS) $(CORE_HDRS) $(TEST_HDRS) | $(BUIL
 cli: $(BUILD)/mqtt_pub-host $(BUILD)/mqtt_sub-host
 
 $(BUILD)/mqtt_pub-host: $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c $(CORE_HDRS) $(TOOLS_HDRS) $(HOST_HDRS) | $(BUILD)/.dir
-	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_SSL_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c -o $@ $(HOST_SSL_LIBS)
+	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_TLS_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/pub_main.c -o $@ $(HOST_TLS_LIBS)
 
 $(BUILD)/mqtt_sub-host: $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c $(CORE_HDRS) $(TOOLS_HDRS) $(HOST_HDRS) | $(BUILD)/.dir
-	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_SSL_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c -o $@ $(HOST_SSL_LIBS)
+	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Isrc/host $(HOST_TLS_CFLAGS) $(CORE_SRCS) $(TOOLS_SRCS) $(HOST_SRCS) src/host/sub_main.c -o $@ $(HOST_TLS_LIBS)
 
 # --- Host: end-to-end smoke test against a local Mosquitto ---
 broker-smoke: cli
