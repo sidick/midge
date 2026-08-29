@@ -1,4 +1,5 @@
-/* src/library/libinit.c - mqtt.library shared-library skeleton (slice 1).
+/* src/library/libinit.c - mqtt.library shared-library skeleton and function
+ * table (Phase 2 slice 2).
  *
  * Supplies the globals and hooks libnix's libinit.o (the single-data-
  * segment shared library startup - see the "libnix" skill,
@@ -13,26 +14,25 @@
  *     linked symbol as `___UserLibCleanup`; the libnix guide text renders
  *     it "__UserLibCleanUp" in prose, which does not match the object
  *     file. Trust the tool, not the prose.
- *   - The private function table (ADDTABL_END below): _InitTab in
+ *   - The private function table (ADD2LIST/ADDTABL_END below): _InitTab in
  *     libinit.o points at a linker "set" named `___FuncTable__` built via
  *     `.stabs` pseudo-ops (see sys-include/stabs.h - this toolchain
  *     targets classic hunk/stabs, not the ELF variant of that header).
- *     Slice 1 has no library functions yet (mqtt_lib.sfd is empty past
- *     the standard Open/Close/Expunge/ExtFunc four), but the list must
- *     still exist and be terminated with -1, or the linker has nothing to
- *     resolve _InitTab's reference to.
+ *     mqtt_lib.sfd's 8 public functions (src/library/mqtt_funcs.c) are
+ *     wired in below, in sfd order, followed by the required -1
+ *     terminator - see the big comment above the ADD2LIST() calls.
  *
- * Zero MQTT logic here by design - this is purely the skeleton that lets
- * OpenLibrary("mqtt.library", 0)/CloseLibrary() work cleanly. src/core is
- * linked into the library binary already (see the Makefile) so the layout
- * is ready for slice 2 to add real entry points to the .sfd and call into
- * it, but nothing calls it yet.
+ * The MQTT logic itself lives in src/library/mqtt_funcs.c (the 8 sfd
+ * entry points) and their generated `Gate_`-prefixed register trampolines
+ * (build/library-gen/gatestubs.c, see the Makefile) - this file only
+ * supplies the skeleton those hang off of.
  */
 
 #include <exec/types.h>
 #include <exec/libraries.h>
 #include <exec/execbase.h>
 #include <proto/exec.h>
+#include <proto/dos.h>
 
 /* stabs.h's ADDTABL_END() expands to file-scope `asm(...)`. `asm` is only
  * a guaranteed keyword under GNU dialects; strict -std=c99 (this project's
@@ -63,6 +63,15 @@ MIDGE_VERSTAG("mqtt.library")
  * `static` - it has to be a real global so it satisfies that reference. */
 struct ExecBase *SysBase;
 
+/* <proto/dos.h> likewise only *declares* `extern struct DosLibrary
+ * *DOSBase;` - opened here (never `static`, same reasoning as SysBase
+ * above: it must be a real global to satisfy that extern for every object
+ * linked into this library, including src/amiga/clock.c's tool_now_ms()
+ * (DateStamp() needs it) and mqtt_funcs.c's CreateNewProcTags(). Slice 2
+ * is the first to need it - slice 1's skeleton had nothing that called
+ * into dos.library. */
+struct DosLibrary *DOSBase;
+
 int __UserLibInit(struct Library *base)
 {
     (void)base;
@@ -72,15 +81,61 @@ int __UserLibInit(struct Library *base)
      * before any library base exists. */
     SysBase = *(struct ExecBase **)4L;
 
+    /* V37 (2.04): the oldest version with CreateNewProcTags() and every
+     * dos.library call mqtt_funcs.c/clock.c need. Never open below 37 -
+     * see CLAUDE.md/the libnix skill's __oslibversion note. Failing this
+     * open aborts LibInit (0 == success is the only case that returns the
+     * library node to the opener), so no caller ever gets a base with a
+     * NULL DOSBase. */
+    DOSBase = (struct DosLibrary *)OpenLibrary((STRPTR) "dos.library", 37);
+    if (!DOSBase)
+        return 1;
+
     return 0; /* 0 == success; nonzero aborts LibInit and the library
                  node is not returned to the opener. */
 }
 
 void __UserLibCleanup(void)
 {
-    /* Nothing to release yet - no MQTT state exists in slice 1. */
+    if (DOSBase) {
+        CloseLibrary((struct Library *)DOSBase);
+        DOSBase = NULL;
+    }
 }
 
-/* Terminates the (empty) private function table. Required even with zero
- * library functions - see the file banner above. */
+/* Wires the 8 mqtt.library entry points (src/library/mqtt_lib.sfd) into
+ * the private function table __UserLibInit's caller (libinit.o's
+ * _LibInit) builds the library node from - see the file banner above for
+ * the overall stabs-linker-set mechanism.
+ *
+ * Each ADD2LIST() call must appear here, in EXACT mqtt_lib.sfd order (the
+ * table position is the function's LVO - -30 for the first entry below,
+ * -36 for the next, and so on by 6, per ==bias 30), because the linker
+ * collects a `.stabs` set's members in the order the assembler encounters
+ * them - listing them together, in sequence, in this one file is what
+ * keeps that order correct.
+ *
+ * `Gate_MQTT_*` (not the plain `MQTT_*` names) are what's referenced:
+ * sfdc --mode=gatestubs --libarg=first --gateprefix=Gate_ (see the
+ * Makefile) generates a register-parameter trampoline under that prefixed
+ * name for each function - Gate_MQTT_CreateClient(host a0, port d0,
+ * opts a1, base a6) - which is the actual jump-table entry AmigaOS calls;
+ * it in turn calls the plain C function of the same un-prefixed name
+ * (mqtt_funcs.c's MQTT_CreateClient(base, host, port, opts), normal C
+ * calling convention) that does the real work. Without --gateprefix, the
+ * generated trampoline and the plain function would collide on the same
+ * symbol name and fail to link - verified by hand against sfdc 1.11f
+ * before settling on this approach (see the task notes / git history for
+ * the failing bare-name attempt). */
+ADD2LIST(Gate_MQTT_CreateClient, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_DeleteClient, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_Connect, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_Publish, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_Subscribe, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_GetMessage, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_FreeMessage, __FuncTable__, 22);
+ADD2LIST(Gate_MQTT_Disconnect, __FuncTable__, 22);
+
+/* Terminates the function table. Required after the last ADD2LIST() call
+ * above (or, in slice 1's case, with zero of them) - see the file banner. */
 ADDTABL_END();

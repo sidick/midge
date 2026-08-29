@@ -8,6 +8,8 @@ tests/copperline/sys/C/codec_selftest
 tests/net/sys/C/mqtt_pub
 tests/library/sys/C/libsmoke
 tests/library/sys/Libs/mqtt.library
+tests/library/netsys/C/libnet
+tests/library/netsys/Libs/mqtt.library
 
 # Editor / OS cruft
 .cache/

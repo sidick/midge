@@ -1,0 +1,30 @@
+# Copperline machine profile for midge's on-target mqtt.library network
+# smoke test. Same shape as ../net/machine.toml (68020, fast RAM, HostSocket
+# board so the guest's bsdsocket.library reaches a real host-side broker)
+# plus a bit more chip/fast RAM than tests/library/machine.toml, since this
+# run spawns a subprocess (mqtt.library's per-connection child) on top of
+# the harness itself.
+[cpu]
+model = "68020"
+
+[memory]
+chip = "1M"
+fast = "8M"
+
+[floppy]
+drives = 1 # DF0 wired but left empty; we boot from a host directory
+
+# Boot straight from a host directory - a separate tree from
+# tests/library/sys (that one stages libsmoke; this one stages libnet +
+# mqtt.library together, see net-run.sh).
+[[filesys]]
+path = "netsys"
+volume = "MidgeLibNetTest"
+bootpri = 10
+
+[hostsocket]
+net = "host"
+
+[emulation]
+power_on = true
+warp_speed = "max"

@@ -2,5 +2,17 @@
 ==basetype struct Library *
 ==libname mqtt.library
 ==bias 30
+==include <exec/types.h>
+==include <exec/libraries.h>
+==include <exec/ports.h>
+==include <libraries/mqtt.h>
 ==public
+APTR MQTT_CreateClient( STRPTR host, UWORD port, struct MqttConnectOpts *opts )(a0,d0,a1)
+VOID MQTT_DeleteClient( APTR client )(a0)
+LONG MQTT_Connect( APTR client )(a0)
+LONG MQTT_Publish( APTR client, STRPTR topic, APTR payload, ULONG len, LONG retain )(a0,a1,a2,d0,d1)
+LONG MQTT_Subscribe( APTR client, STRPTR filter, UBYTE qos )(a0,a1,d0)
+struct MqttMessage *MQTT_GetMessage( APTR client )(a0)
+VOID MQTT_FreeMessage( APTR client, struct MqttMessage *msg )(a0,a1)
+VOID MQTT_Disconnect( APTR client )(a0)
 ==end

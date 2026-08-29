@@ -10,6 +10,8 @@
 #   make volamos-test-target  codec self-test via volamos - faster local loop
 #   make library-smoke  on-target mqtt.library OpenLibrary/CloseLibrary smoke test
 #   make volamos-library-smoke  same check via volamos - faster local loop
+#   make library-net-smoke  on-target mqtt.library end-to-end API test (real broker)
+#   make volamos-library-net-smoke  same check via volamos - faster local loop, not a CI substitute
 #   make clean
 #
 # The core is portable C99, so `test` and `cli` build with any host compiler.
@@ -73,7 +75,7 @@ LIB_SFD     := src/library/mqtt_lib.sfd
 LIB_INCDIR  := $(BUILD)/include
 LIB_GENDIR  := $(BUILD)/library-gen
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke
+.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke
 
 all: test cli
 
@@ -138,7 +140,24 @@ m68k-docker:
 # slice 2 adds real functions - at that point -o should start working and
 # either form is fine.
 library-headers: $(LIB_INCDIR)/proto/mqtt.h $(LIB_INCDIR)/inline/mqtt.h \
-	$(LIB_INCDIR)/fd/mqtt_lib.fd $(LIB_GENDIR)/gatestubs.c $(LIB_GENDIR)/functable.i
+	$(LIB_INCDIR)/clib/mqtt_protos.h \
+	$(LIB_INCDIR)/fd/mqtt_lib.fd $(LIB_INCDIR)/libraries/mqtt.h \
+	$(LIB_GENDIR)/gatestubs.c $(LIB_GENDIR)/functable.i $(LIB_GENDIR)/libproto.h
+
+# proto/mqtt.h #includes <clib/mqtt_protos.h> (the plain, non-libbase-first
+# prototypes) unconditionally - needed even though callers only ever go
+# through the inline/mqtt.h macros (GNUC path), since that #include line
+# itself must resolve.
+$(LIB_INCDIR)/clib/mqtt_protos.h: $(LIB_SFD) | $(BUILD)/.dir
+	@mkdir -p $(LIB_INCDIR)/clib
+	$(SFDC) --mode=clib --target=$(SFD_TARGET) $(LIB_SFD) > $@
+
+# The public structs header is hand-written (src/library/include/), not
+# sfdc-generated - callers reach it as <libraries/mqtt.h> via this same
+# -Ibuild/include as the sfdc-generated proto/inline/fd headers.
+$(LIB_INCDIR)/libraries/mqtt.h: src/library/include/libraries/mqtt.h | $(BUILD)/.dir
+	@mkdir -p $(LIB_INCDIR)/libraries
+	cp $< $@
 
 $(LIB_INCDIR)/proto/mqtt.h: $(LIB_SFD) | $(BUILD)/.dir
 	@mkdir -p $(LIB_INCDIR)/proto
@@ -153,31 +172,59 @@ $(LIB_INCDIR)/fd/mqtt_lib.fd: $(LIB_SFD) | $(BUILD)/.dir
 	$(SFDC) --mode=fd $(LIB_SFD) > $@
 
 # Library-side gate stubs (the trampolines library functions are called
-# through) and the function table they populate - both feed the `library`
-# link below, not consumed by mqtt.library's callers.
+# through), the function table they populate, and the libbase-first
+# prototypes header - all three feed the `library` link below, not
+# consumed by mqtt.library's callers.
+#
+# --gateprefix=Gate_: without it, sfdc's gatestubs mode emits the register-
+# parameter trampoline under the SAME name as the plain C function it
+# calls (e.g. two conflicting `MQTT_CreateClient`s) - verified against
+# sfdc 1.11f/m68k-amigaos-gcc: that fails to compile ("conflicting types").
+# The prefixed trampoline is what libinit.c's ADD2LIST() calls reference;
+# mqtt_funcs.c implements the plain (unprefixed) names the trampolines
+# call into.
 $(LIB_GENDIR)/gatestubs.c: $(LIB_SFD) | $(BUILD)/.dir
 	@mkdir -p $(LIB_GENDIR)
-	$(SFDC) --mode=gatestubs --target=$(SFD_TARGET) --libarg=first $(LIB_SFD) > $@
+	$(SFDC) --mode=gatestubs --target=$(SFD_TARGET) --libarg=first --gateprefix=Gate_ $(LIB_SFD) > $@
 
 $(LIB_GENDIR)/functable.i: $(LIB_SFD) | $(BUILD)/.dir
 	@mkdir -p $(LIB_GENDIR)
 	$(SFDC) --mode=functable --target=$(SFD_TARGET) $(LIB_SFD) > $@
+
+# Prototypes for the plain (unprefixed) library functions, base-first -
+# included by mqtt_funcs.c purely so the compiler checks its function
+# definitions against the exact signatures sfdc derived from the .sfd
+# (catches a register/type mismatch at compile time instead of leaving it
+# as a silent cross-TU link-time footgun against gatestubs.c).
+$(LIB_GENDIR)/libproto.h: $(LIB_SFD) | $(BUILD)/.dir
+	@mkdir -p $(LIB_GENDIR)
+	$(SFDC) --mode=libproto --target=$(SFD_TARGET) --libarg=first $(LIB_SFD) > $@
 
 # --- mqtt.library: link ---
 # libinit.o (libnix's single-data-segment shared-library startup - see the
 # "libnix" skill) replaces the normal C startup, so -nostartfiles keeps the
 # gcc driver from also pulling in crt0/libnix's program startup. No
 # -fbaserel: this is libinit.o, not the per-caller-datasegment libinitr.o.
-# src/core is linked in already (portable C99, no OS deps) so the layout
-# is ready for slice 2 - nothing calls into it yet since mqtt_lib.sfd has
-# no functions.
+# src/core is linked in unmodified (portable C99, no OS deps - CLAUDE.md).
+# transport_bsdsocket.c/clock.c are the same src/amiga platform files the
+# CLI tools use (NOT args.c/pub_main.c/sub_main.c, which are CLI-only) -
+# mqtt_funcs.c's per-connection subprocess drives mqtt_client through them
+# exactly like src/amiga/pub_main.c/sub_main.c do.
+# -Isrc/library/include reaches the hand-written <libraries/mqtt.h> (both
+# gatestubs.c and mqtt_funcs.c include it); -I$(LIB_GENDIR) reaches the
+# sfdc-generated libproto.h mqtt_funcs.c checks its own signatures against.
 LIBINIT_O := /opt/amiga/m68k-amigaos/libnix/lib/libinit.o
 
 library: $(BUILD)/mqtt.library
 
-$(BUILD)/mqtt.library: $(LIB_SRCS) $(CORE_SRCS) $(LIB_HDRS) $(CORE_HDRS) $(LIB_GENDIR)/gatestubs.c | $(BUILD)/.dir
+$(BUILD)/mqtt.library: $(LIB_SRCS) $(CORE_SRCS) src/amiga/transport_bsdsocket.c src/amiga/clock.c \
+		$(LIB_HDRS) $(CORE_HDRS) $(AMIGA_HDRS) \
+		$(LIB_GENDIR)/gatestubs.c $(LIB_GENDIR)/libproto.h | $(BUILD)/.dir
 	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -nostartfiles \
-		$(LIBINIT_O) $(LIB_SRCS) $(CORE_SRCS) $(LIB_GENDIR)/gatestubs.c \
+		-Isrc/library/include -I$(LIB_GENDIR) \
+		$(LIBINIT_O) $(LIB_SRCS) $(CORE_SRCS) \
+		src/amiga/transport_bsdsocket.c src/amiga/clock.c \
+		$(LIB_GENDIR)/gatestubs.c \
 		-o $@
 
 # --- m68k: on-target codec self-test (run by test-target via Copperline) ---
@@ -209,6 +256,29 @@ library-smoke: library libsmoke-m68k
 # way to iterate on mqtt.library than a full Copperline boot.
 volamos-library-smoke: library libsmoke-m68k
 	sh tests/library/volamos-run.sh
+
+# --- m68k: on-target mqtt.library end-to-end network test harness ---
+# A normal libnix CLI program (not the library skeleton) built against the
+# generated caller-side headers (proto/mqtt.h + inline/mqtt.h), exactly as
+# any other mqtt.library client would be - see tests/library/libnet.c.
+libnet-m68k: library-headers | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) tests/library/libnet.c -o $(BUILD)/libnet
+
+# Real Copperline boot (CI/release gate): stages build/libnet and
+# build/mqtt.library into a throwaway boot volume with Copperline's
+# HostSocket board fitted, runs it against a real scratch Mosquitto, and
+# asserts both the serial capture and a host observer - see
+# tests/library/net-run.sh.
+library-net-smoke: library libnet-m68k cli
+	sh tests/library/net-run.sh
+
+# --- Same check via volamos: no emulated boot, much faster local loop ---
+# Not a CI/release gate (see tests/library/volamos-net-run.sh) - just a
+# quicker way to iterate than a full Copperline boot. May SKIP (exit 0) if
+# volamos doesn't support mqtt.library's CreateNewProcTags/MsgPort
+# subprocess model - see that script's banner.
+volamos-library-net-smoke: library libnet-m68k cli
+	sh tests/library/volamos-net-run.sh
 
 # --- On-target network smoke: Copperline HostSocket -> host Mosquitto ---
 # No machine-specific assets needed - see tests/net/README.md.
