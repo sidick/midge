@@ -37,12 +37,18 @@ byte-exact vectors (`tests/vectors.h`, built by hand from the spec) in
 - **QoS 0** is fully supported both directions.
 - **QoS 1** subscribe/receive is supported: `mqtt_client_process()`
   auto-acknowledges an incoming QoS 1 PUBLISH with a PUBACK.
-  **QoS 1 publish (outbound)** is not yet exposed - `mqtt_client_publish()`
-  only sends QoS 0, and `mqtt_pub`/`mqtt_sub` reject `-q 1`/`QOS 1` on the
-  publish side with a message pointing at Phase 2. Outbound QoS 1 needs
-  retransmission-on-timeout and (for a persistent session) dedup state,
-  which belongs with the reconnect/session work `mqtt.library` brings in
-  Phase 2, not bolted onto the CLI tools first.
+  **QoS 1 publish (outbound)** stays unsupported at the `src/core` level -
+  `mqtt_client_publish()` only ever sends QoS 0, deliberately: the
+  retransmission-on-timeout and dedup state QoS 1 needs doesn't belong in
+  an allocation-free, stateless-beyond-one-connection core (see
+  `docs/ARCHITECTURE.md`'s layering rules). That state now lives in
+  `mqtt.library`'s connection subprocess instead (Phase 2, shipped) -
+  `MQTT_Publish()` supports QoS 1 with DUP retransmission, and the
+  default, library-linked `mqtt_pub` exposes it via `QOS 1`. The
+  **static** build (`mqtt_pub-static`, linking `src/core` directly with no
+  subprocess to hold that state) still only supports QoS 0 publish and
+  rejects `QOS 1` with a message explaining why - see
+  `userdocs/CLI-Reference.md`'s "Two build flavours" section.
 - **QoS 2 is out of scope entirely**, in this release and for the
   foreseeable roadmap. It roughly doubles the state machine (a 4-packet
   handshake with its own dedup/retry rules) for a guarantee
