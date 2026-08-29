@@ -1,0 +1,2 @@
+; Boots straight into the codec self-test; see ../../run.sh.
+codec_selftest

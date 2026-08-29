@@ -1,0 +1,31 @@
+# Copperline machine profile for midge's on-target network smoke test.
+#
+# 68020 (midge's baseline), with fast RAM: the plain default profile (a
+# stock A500, 512K chip, no fast RAM, 68000) was observed to be too slow to
+# finish booting the bundled AROS to a usable Shell within a sane benchmark
+# window. [hostsocket] fits Copperline's HostSocket board - bsdsocket.library
+# for the guest, backed directly by real host OS sockets under `net = "host"`
+# - so the guest ends up sharing the host's own network identity; see
+# tests/net/README.md and Copperline's docs/guide/configuration.md.
+[cpu]
+model = "68020"
+
+[memory]
+chip = "1M"
+fast = "8M"
+
+[floppy]
+drives = 1 # DF0 wired but left empty; we boot from a host directory
+
+# Boot straight from a host directory, same pattern as tests/copperline/.
+[[filesys]]
+path = "sys"
+volume = "MidgeNetTest"
+bootpri = 10
+
+[hostsocket]
+net = "host"
+
+[emulation]
+power_on = true
+warp_speed = "max"

@@ -1,0 +1,3 @@
+; Publishes one message to the host Mosquitto started by net-smoke.sh.
+; PORT here must match net-smoke.sh's own PORT variable.
+mqtt_pub HOST 127.0.0.1 PORT 18831 TOPIC midge/net-smoke MESSAGE hello-from-copperline

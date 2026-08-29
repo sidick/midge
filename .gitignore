@@ -1,0 +1,12 @@
+# Build output
+/build/
+*.o
+*.a
+
+# Copperline on-target tests: cross-built binaries staged into boot volumes.
+tests/copperline/sys/C/codec_selftest
+tests/net/sys/C/mqtt_pub
+
+# Editor / OS cruft
+.cache/
+.DS_Store
