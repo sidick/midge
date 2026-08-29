@@ -15,6 +15,9 @@ planned for future releases.
 - A TCP/IP stack providing `bsdsocket.library` (Roadshow, AmiTCP, Miami, or
   an emulator-provided stack).
 
+See [Installation](Installation.md) for unpacking the archive and the
+`mqtt.library` install step the default tools need.
+
 ## Quick start
 
 ```

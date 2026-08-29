@@ -5,6 +5,10 @@ powers `mqtt_pub`/`mqtt_sub`, as an ordinary shared library other software
 can call. Use it to add MQTT publish/subscribe to your own AmigaOS
 program without writing any protocol code.
 
+This page is the narrative guide - installing it, the threading model,
+auto-reconnect. See the [API Reference](mqtt-library-reference.md) for
+every function.
+
 ## Requirements
 
 - AmigaOS 3.1+ (3.2 is the reference platform), 68020 or better.

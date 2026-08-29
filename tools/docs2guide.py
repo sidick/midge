@@ -25,8 +25,10 @@ WIDTH = 76
 # Site nav order; (file-slug, node title). MAIN is index (the old wiki Home).
 PAGES = [
     ('index', 'midge'),
+    ('Installation', 'Installation'),
     ('CLI-Reference', 'CLI Reference'),
     ('mqtt-library', 'mqtt.library'),
+    ('mqtt-library-reference', 'mqtt.library API Reference'),
 ]
 SLUGS = {slug for slug, _ in PAGES}
 

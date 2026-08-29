@@ -58,7 +58,15 @@ requirements. If a change is purely internal, no docs edit is needed — but
 say so explicitly. Adding a page means updating the `nav` in `mkdocs.yml`
 AND `PAGES` in `tools/docs2guide.py`. Keep pages within docs2guide's
 Markdown subset (headings, bold, inline/fenced code, pipe tables, lists,
-blockquotes, links) so the AmigaGuide stays faithful.
+blockquotes, links) so the AmigaGuide stays faithful — bullet lists in
+particular must use column-0 `- ` markers with exactly 2-space
+continuation, never nested/deeper indentation (4+ spaces reads as an
+indented code block to `docs2guide.py`'s parser).
+
+`userdocs/mqtt-library-reference.md` is the one generated page: it's built
+from `src/library/mqtt.doc` (the API autodoc, itself hand-maintained) by
+`tools/autodoc2md.py`. If you change `mqtt.doc`, run `make api-reference`
+and commit the regenerated page in the same PR — don't hand-edit it.
 
 ## Releases
 

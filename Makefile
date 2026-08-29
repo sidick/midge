@@ -77,7 +77,7 @@ LIB_SFD     := src/library/mqtt_lib.sfd
 LIB_INCDIR  := $(BUILD)/include
 LIB_GENDIR  := $(BUILD)/library-gen
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke examples example-smoke
+.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide api-reference dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke examples example-smoke
 
 all: test cli
 
@@ -351,6 +351,14 @@ net-smoke: m68k library cli
 # subprocess-per-client model) - no `library` dependency needed here.
 volamos-smoke: m68k cli
 	sh tests/net/volamos-smoke.sh
+
+# --- api-reference: userdocs/mqtt-library-reference.md, generated from ------
+# src/library/mqtt.doc (the API reference autodoc). Checked in like any
+# other userdocs page (mkdocs' docs_dir needs it physically present, and
+# the shared docs-deploy workflow has no hook to generate it first) - but
+# it's generated, not hand-edited: edit mqtt.doc, then rerun this.
+api-reference:
+	python3 tools/autodoc2md.py src/library/mqtt.doc userdocs/mqtt-library-reference.md
 
 # --- guide: AmigaGuide user documentation, generated from userdocs/ ----------
 guide: | $(BUILD)/.dir
