@@ -69,3 +69,20 @@ Example:
 ```
 mqtt_sub HOST 192.168.1.10 TOPIC home/#
 ```
+
+## Host development builds
+
+The repo also builds host-native `mqtt_pub-host` / `mqtt_sub-host` (via
+`make cli`), used for development and by the CI broker smoke tests. They
+take getopt-style flags mirroring the Amiga arguments above (`-h HOST`,
+`-p PORT`, `-t TOPIC`, and so on), plus two flags that only exist on the
+host builds so far:
+
+| Flag | Meaning |
+|---|---|
+| `-s` | Enable TLS, with certificate and hostname verification on, checked against the system trust store. When no `-p` is given, the default port becomes 8883 instead of 1883. |
+| `-S` | Enable TLS but skip certificate verification. Intended only for testing against self-signed or otherwise untrusted brokers. |
+
+TLS is opt-in and off by default everywhere in midge. The Amiga-side TLS
+transport (via AmiSSL) is not yet wired up - `-s`/`-S` currently apply to
+the host builds only.

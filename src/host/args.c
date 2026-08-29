@@ -14,11 +14,12 @@
 int host_parse_args(int argc, char **argv, int is_pub, tool_opts *opts)
 {
     int ch;
-    const char *optstring = is_pub ? "h:p:t:m:f:q:i:u:P:k:rv"
-                                    : "h:p:t:q:i:u:P:k:C:v";
+    const char *optstring = is_pub ? "h:p:t:m:f:q:i:u:P:k:rvsS"
+                                    : "h:p:t:q:i:u:P:k:C:vsS";
 
     memset(opts, 0, sizeof(*opts));
-    opts->port = 1883;
+    /* opts->port stays 0 (memset) until resolved after the option loop,
+     * once we know whether -s/-S was given. */
     opts->keepalive = 60;
 
     optind = 1;
@@ -37,18 +38,24 @@ int host_parse_args(int argc, char **argv, int is_pub, tool_opts *opts)
         case 'r': opts->retain = 1; break;
         case 'C': opts->count = atoi(optarg); break;
         case 'v': opts->verbose = 1; break;
+        case 's': opts->tls = 1; break;
+        case 'S': opts->tls = 1; opts->tls_insecure = 1; break;
         default:
             fprintf(stderr,
                     is_pub ? "usage: %s -h host [-p port] -t topic "
                              "(-m message | -f file) [-q qos] [-i id] "
-                             "[-u user] [-P pass] [-k keepalive] [-r] [-v]\n"
+                             "[-u user] [-P pass] [-k keepalive] [-r] [-s] "
+                             "[-S] [-v]\n"
                            : "usage: %s -h host [-p port] -t topic "
                              "[-q qos] [-i id] [-u user] [-P pass] "
-                             "[-k keepalive] [-C count] [-v]\n",
+                             "[-k keepalive] [-C count] [-s] [-S] [-v]\n",
                     argv[0]);
             return -1;
         }
     }
+
+    if (opts->port == 0)
+        opts->port = opts->tls ? 8883 : 1883;
 
     if (!opts->host || !opts->topic) {
         fprintf(stderr, "%s: -h and -t are required\n", argv[0]);
