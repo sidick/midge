@@ -19,6 +19,11 @@
 #   - the cross-built harness    CODEC_SELFTEST_M68K= (default build/codec_selftest)
 #   - KICK= (optional): a Kickstart ROM. If unset, boots Copperline's
 #     bundled AROS Kickstart replacement - redistributable, so CI needs no ROM.
+#
+# For a much faster local loop (milliseconds instead of a ~10s AROS boot),
+# `make volamos-test-target` runs the same self-test under volamos instead -
+# see volamos-run.sh. Not a CI substitute: this Copperline run is the one
+# that exercises real 68020 codegen through a booted Kickstart.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)

@@ -7,6 +7,7 @@
 #   make m68k-docker cross-build inside the CI container (no local toolchain)
 #   make net-smoke   on-target network test (Copperline HostSocket; no ROM/WB needed)
 #   make volamos-smoke  same check via volamos - faster local loop, not a CI substitute
+#   make volamos-test-target  codec self-test via volamos - faster local loop
 #   make clean
 #
 # The core is portable C99, so `test` and `cli` build with any host compiler.
@@ -58,7 +59,7 @@ TEST_HDRS  := $(wildcard tests/*.h)
 
 BUILD := build
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke guide dist clean build test-host test-target lint
+.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint
 
 all: test cli
 
@@ -120,6 +121,12 @@ codec-selftest-m68k: | $(BUILD)/.dir
 codec-selftest-m68k-docker:
 	$(DOCKER) run --rm --platform linux/amd64 $(DOCKER_USER) -v "$(CURDIR)":/work -w /work \
 		$(AMIGA_GCC_IMAGE) sh -lc 'PATH=/opt/amiga/bin:$$PATH make codec-selftest-m68k'
+
+# --- Same codec check via volamos: no emulated boot, much faster local loop ---
+# Not a CI/release gate (see tests/copperline/volamos-run.sh) - just a
+# quicker way to iterate on the codec than a full Copperline boot.
+volamos-test-target: codec-selftest-m68k
+	sh tests/copperline/volamos-run.sh
 
 # --- On-target network smoke: Copperline HostSocket -> host Mosquitto ---
 # No machine-specific assets needed - see tests/net/README.md.
