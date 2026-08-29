@@ -39,6 +39,27 @@ struct MqttConnectOpts {
     STRPTR mco_Password;      /* NULL = no password; ignored if Username is NULL */
     UWORD  mco_KeepAlive;     /* seconds; 0 disables keepalive PINGREQ */
     BOOL   mco_CleanSession;  /* TRUE = clean session (the common case) */
+    BOOL   mco_AutoReconnect; /* FALSE (default/zeroed struct) = today's
+                                  behaviour: an unexpected connection drop
+                                  (transport error, keepalive timeout) leaves
+                                  the client disconnected until the caller
+                                  makes a fresh MQTT_Connect() call.
+                                  TRUE = once MQTT_Connect() has succeeded,
+                                  the client's subprocess re-establishes the
+                                  connection itself on any unexpected drop -
+                                  NOT an explicit MQTT_Disconnect() and NOT a
+                                  failed *initial* MQTT_Connect() - retrying
+                                  with exponential backoff (1s, 2s, 4s, ...
+                                  capped at 32s, forever) and automatically
+                                  re-issuing every MQTT_Subscribe() filter
+                                  made since MQTT_Connect() on each successful
+                                  reconnect. While reconnecting,
+                                  MQTT_Publish()/MQTT_Subscribe() fail fast
+                                  with MQTTERR_NOTCONNECTED (no queueing);
+                                  messages already queued by MQTT_GetMessage()
+                                  remain retrievable throughout.
+                                  MQTT_Disconnect()/MQTT_DeleteClient() cancel
+                                  an in-progress reconnect. */
 };
 
 /* --- Delivered message (MQTT_GetMessage/MQTT_FreeMessage) -----------------
@@ -82,6 +103,16 @@ struct MqttMessage {
  * Returns 0 only after the broker's SUBACK grants the subscription. A
  * SUBACK return code of 0x80 (refused) yields MQTTERR_REFUSED; no SUBACK
  * within ~10s yields MQTTERR_TIMEOUT.
+ *
+ * --- Reconnecting-mode semantics (mco_AutoReconnect == TRUE only) ---------
+ * While the client's subprocess is between an unexpected connection drop
+ * and a restored connection, MQTT_Publish() and MQTT_Subscribe() both fail
+ * fast with MQTTERR_NOTCONNECTED - neither is queued for later delivery.
+ * MQTT_GetMessage() keeps returning any messages already queued (and any a
+ * reconnect goes on to deliver once it succeeds); it never itself fails.
+ * An MQTT_Connect() call made while already reconnecting also fails fast
+ * with MQTTERR_NOTCONNECTED (a reconnect is already in progress in the
+ * background; a second explicit MQTT_Connect() would just race it).
  *
  * --- Return / error codes --------------------------------------------------
  * 0 (MQTTERR_OK) on success; negative on failure. MQTT_Connect/

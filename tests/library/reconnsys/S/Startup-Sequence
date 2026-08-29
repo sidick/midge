@@ -1,0 +1,2 @@
+; Boots straight into the mqtt.library reconnect/backoff smoke test; see ../../reconn-run.sh.
+libreconn

@@ -12,6 +12,7 @@
 #   make volamos-library-smoke  same check via volamos - faster local loop
 #   make library-net-smoke  on-target mqtt.library end-to-end API test (real broker)
 #   make volamos-library-net-smoke  same check via volamos - faster local loop, not a CI substitute
+#   make library-reconnect-smoke  on-target mco_AutoReconnect test (broker restart mid-run)
 #   make clean
 #
 # The core is portable C99, so `test` and `cli` build with any host compiler.
@@ -75,7 +76,7 @@ LIB_SFD     := src/library/mqtt_lib.sfd
 LIB_INCDIR  := $(BUILD)/include
 LIB_GENDIR  := $(BUILD)/library-gen
 
-.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke
+.PHONY: all test cli broker-smoke m68k m68k-docker codec-selftest-m68k codec-selftest-m68k-docker net-smoke volamos-smoke volamos-test-target guide dist clean build test-host test-target lint library-headers library libsmoke-m68k library-smoke volamos-library-smoke libnet-m68k library-net-smoke volamos-library-net-smoke libreconn-m68k library-reconnect-smoke
 
 all: test cli
 
@@ -279,6 +280,23 @@ library-net-smoke: library libnet-m68k cli
 # subprocess model - see that script's banner.
 volamos-library-net-smoke: library libnet-m68k cli
 	sh tests/library/volamos-net-run.sh
+
+# --- m68k: on-target mco_AutoReconnect test harness ---
+# Same shape as libnet-m68k (a normal CLI program, not the library skeleton
+# itself) - see tests/library/libreconn.c.
+libreconn-m68k: library-headers | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) tests/library/libreconn.c -o $(BUILD)/libreconn
+
+# Real Copperline boot (CI/release gate): stages build/libreconn and
+# build/mqtt.library into a throwaway boot volume with Copperline's
+# HostSocket board fitted, runs it against a real scratch Mosquitto that
+# this test kills and restarts mid-run (same port) to prove
+# mco_AutoReconnect's backoff + auto-resubscribe actually recovers the
+# session - see tests/library/reconn-run.sh. Needs mqtt_pub-host (`make
+# cli`) to retained-publish the phase1/phase2 messages, same as
+# library-net-smoke.
+library-reconnect-smoke: library libreconn-m68k cli
+	sh tests/library/reconn-run.sh
 
 # --- On-target network smoke: Copperline HostSocket -> host Mosquitto ---
 # No machine-specific assets needed - see tests/net/README.md.

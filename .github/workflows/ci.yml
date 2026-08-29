@@ -11,9 +11,11 @@ name: CI
 # skip-on-docs-only-PR behavior. `broker-smoke` (host CLI tools against a
 # real Mosquitto), `net-smoke` (cross-built mqtt_pub under Copperline's
 # HostSocket board against a real Mosquitto - see tests/net/README.md),
-# `library-smoke` (mqtt.library opened and driven on-target, both the plain
-# OpenLibrary/CloseLibrary check and the full API against a real Mosquitto -
-# see tests/library/) and `docs-build` (strict MkDocs + AmigaGuide check)
+# `library-smoke` (mqtt.library opened and driven on-target - the plain
+# OpenLibrary/CloseLibrary check, the full API against a real Mosquitto, and
+# the mco_AutoReconnect backoff/auto-resubscribe check across a broker
+# restart - see tests/library/) and `docs-build` (strict MkDocs + AmigaGuide
+# check)
 # stay local jobs -- none fit the five verbs cleanly (each needs an apt
 # package the shared workflow's own jobs don't install).
 
@@ -119,6 +121,8 @@ jobs:
         run: PATH=/opt/amiga/bin:$PATH make library-smoke
       - name: Run mqtt.library end-to-end API smoke test
         run: PATH=/opt/amiga/bin:$PATH make library-net-smoke
+      - name: Run mqtt.library auto-reconnect smoke test
+        run: PATH=/opt/amiga/bin:$PATH make library-reconnect-smoke
 
   docs-build:
     name: Docs site + AmigaGuide build

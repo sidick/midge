@@ -177,6 +177,337 @@ static void deliver_cb(void *user, const mqtt_packet *pkt)
     PutMsg(h->ch_MsgPort, &m->mm_Msg);
 }
 
+/* --- mco_AutoReconnect: remembered-subscriptions list (see mqtt_priv.h) --
+ * One AllocVec'd node per filter successfully MQTT_Subscribe()'d since the
+ * last MQTT_Connect(), child-task-owned, singly linked. `filter` points at
+ * storage immediately following this node (one AllocVec covers both), same
+ * layout idiom as deliver_cb()'s struct MqttMessage above. */
+typedef struct SubNode {
+    struct SubNode *next;
+    UBYTE  qos;
+    STRPTR filter; /* NUL-terminated copy - cm_Topic/cm_Topic-style mqtt_str
+                       inputs only stay valid for one SUBSCRIBE exchange, see
+                       mqtt_priv.h's MqttCmdMsg comment, so this must be a
+                       copy, not a pointer into the caller's argument */
+} SubNode;
+
+/* Best-effort: on AllocVec failure the filter is silently not remembered -
+ * the SUBSCRIBE this call follows already succeeded and was already
+ * reported to the caller as 0, so there is no error to surface here; the
+ * only consequence is that this one filter won't be auto-resubscribed after
+ * a future reconnect. */
+static void sub_list_add(SubNode **head, mqtt_str filter, UBYTE qos)
+{
+    SubNode *n = (SubNode *)AllocVec(
+        (ULONG)(sizeof(SubNode) + (size_t)filter.len + 1), MEMF_PUBLIC);
+    if (!n)
+        return;
+    n->filter = (STRPTR)(n + 1);
+    memcpy(n->filter, filter.ptr, filter.len);
+    n->filter[filter.len] = '\0';
+    n->qos = qos;
+    n->next = *head;
+    *head = n;
+}
+
+static void sub_list_free(SubNode *head)
+{
+    while (head) {
+        SubNode *next = head->next;
+        FreeVec(head);
+        head = next;
+    }
+}
+
+/* --- Transport-open + client-init + pump-to-CONNECTED, factored out of
+ * MQTTCMD_CONNECT's original inline body so child_reconnect_loop() below can
+ * reuse the exact same sequence (including the break_sigmask wiring, so
+ * cmd_port stays a live wakeup source for recv()'s WaitSelect() poll during
+ * a reconnect attempt too - see transport_bsdsocket.h). Returns 0 on success
+ * (client is MQTT_CS_CONNECTED, transport open) or a negative
+ * mqtt_err/mqtt_client_err/MQTTERR_* code (transport already closed on
+ * failure, mirroring the original inline code). --- */
+static int child_connect(MqttClientHandle *h, struct MsgPort *cmd_port,
+                          mqtt_client *client, mqtt_transport *transport,
+                          bsdsocket_ctx *bctx, uint8_t *txbuf, uint8_t *rxbuf)
+{
+    mqtt_connect_opts co;
+    int rc;
+
+    memset(&co, 0, sizeof(co));
+    if (h->ch_Opts.mco_ClientID) {
+        co.client_id.ptr = (const char *)h->ch_Opts.mco_ClientID;
+        co.client_id.len =
+            (uint16_t)strlen((const char *)h->ch_Opts.mco_ClientID);
+    }
+    if (h->ch_Opts.mco_Username) {
+        co.username.ptr = (const char *)h->ch_Opts.mco_Username;
+        co.username.len =
+            (uint16_t)strlen((const char *)h->ch_Opts.mco_Username);
+        if (h->ch_Opts.mco_Password) {
+            co.password.ptr = (const char *)h->ch_Opts.mco_Password;
+            co.password.len =
+                (uint16_t)strlen((const char *)h->ch_Opts.mco_Password);
+        }
+    }
+    co.clean_session = h->ch_Opts.mco_CleanSession ? 1 : 0;
+    co.keepalive = h->ch_Opts.mco_KeepAlive;
+
+    if (transport_bsdsocket_connect(transport, bctx,
+            (const char *)h->ch_Host, h->ch_Port) != 0)
+        return MQTTERR_NOTCONNECTED;
+    /* Extra wakeup source for recv()'s WaitSelect poll, so a
+     * PUBLISH/SUBSCRIBE/DISCONNECT/QUIT arriving on cmd_port while we're
+     * pumping the connection is noticed within the poll instead of up to a
+     * second late. */
+    bctx->break_sigmask = 1UL << cmd_port->mp_SigBit;
+
+    mqtt_client_init(client, transport, &co, txbuf, MQTT_LIB_TXBUF_SIZE,
+                      rxbuf, MQTT_LIB_RXBUF_SIZE);
+    rc = mqtt_client_connect(client, tool_now_ms());
+    while (rc == 0 && mqtt_client_get_state(client) == MQTT_CS_CONNECTING)
+        rc = mqtt_client_process(client, tool_now_ms(), deliver_cb, h);
+
+    if (rc != 0 || mqtt_client_get_state(client) != MQTT_CS_CONNECTED) {
+        int err = (rc != 0) ? rc : -(int)MQTT_CLIENT_ERR_CONNECT_REFUSED;
+        transport->close(transport->ctx);
+        return err;
+    }
+    return 0;
+}
+
+/* --- SUBSCRIBE + SUBACK-wait, factored out of MQTTCMD_SUBSCRIBE's original
+ * inline body so child_reconnect_loop() below can reuse it for
+ * auto-resubscribing every remembered filter after a reconnect. On a pump
+ * failure mid-wait, closes the transport and clears *have_client_flag -
+ * exactly like the original inline code did to the enclosing child_run()'s
+ * own have_client. Returns 0, MQTTERR_REFUSED, MQTTERR_TIMEOUT, or a
+ * negative mqtt_err/mqtt_client_err from the pump. --- */
+static LONG child_subscribe_wait(MqttClientHandle *h, mqtt_client *client,
+                                  mqtt_transport *transport,
+                                  int *have_client_flag, mqtt_str filter,
+                                  UBYTE qos)
+{
+    LONG result = (LONG)mqtt_client_subscribe(client, filter, qos);
+
+    if (result != 0)
+        return result;
+
+    /* Core allocates the SUBSCRIBE's packet id internally (alloc_packet_id()
+     * is file-static in mqtt_client.c) and mqtt_client_subscribe() has no
+     * output parameter for it, so it can't be matched exactly without a
+     * further core change. Because each SUBSCRIBE (whether from
+     * MQTT_Subscribe() or an auto-resubscribe below) is issued one at a
+     * time and waited on to completion before the next, matching on "any
+     * SUBACK" is sound here - see the task notes for this deliberate
+     * deviation from packet-id matching. */
+    {
+        uint32_t wait_start;
+
+        h->ch_AckSeen = 0;
+        /* Wrap-safe elapsed-time idiom (now - start >= timeout, unsigned),
+         * matching src/core's own keepalive arithmetic. */
+        wait_start = tool_now_ms();
+        result = MQTTERR_TIMEOUT;
+        for (;;) {
+            int rc = mqtt_client_process(client, tool_now_ms(), deliver_cb, h);
+            if (rc != 0) {
+                result = (LONG)rc;
+                transport->close(transport->ctx);
+                *have_client_flag = 0;
+                break;
+            }
+            if (h->ch_AckSeen && h->ch_AckType == MQTT_SUBACK) {
+                result = (h->ch_AckCode == 0x80) ? (LONG)MQTTERR_REFUSED : 0;
+                break;
+            }
+            if (tool_now_ms() - wait_start >= MQTT_LIB_SUBACK_TIMEOUT_MS)
+                break;
+        }
+    }
+    return result;
+}
+
+/* --- MQTTCMD_QUIT's teardown, factored out so child_reconnect_loop() below
+ * can also honour a QUIT that arrives mid-backoff without duplicating the
+ * free/reply/Forbid/ReplyMsg sequence. Does NOT return control usefully to
+ * the caller for further work - the caller (child_run(), directly or via
+ * child_reconnect_loop()) must do nothing more than `return;` immediately
+ * afterwards, ending the process (see mqtt_child_entry()'s banner: no
+ * further blocking/Wait-capable call is safe once Forbid() has fired here).
+ * --- */
+static void child_do_quit(struct MsgPort *cmd_port, MqttCmdMsg *cm,
+                           uint8_t *txbuf, uint8_t *rxbuf, uint8_t *txbuf2,
+                           int have_client, mqtt_client *client,
+                           SubNode *subs)
+{
+    struct Message *extra;
+
+    if (have_client)
+        mqtt_client_disconnect(client);
+    sub_list_free(subs);
+
+    if (txbuf)
+        FreeVec(txbuf);
+    if (rxbuf)
+        FreeVec(rxbuf);
+    if (txbuf2)
+        FreeVec(txbuf2);
+
+    /* Defensive: reply anything else queued behind Quit so no caller is
+     * left waiting forever. In practice there should never be one -
+     * MQTT_DeleteClient() is documented as the only Quit sender, and
+     * callers hold the handle exclusively - but a stray command here must
+     * not hang. */
+    while ((extra = GetMsg(cmd_port)) != NULL) {
+        ((MqttCmdMsg *)extra)->cm_Result = MQTTERR_NOTCONNECTED;
+        ReplyMsg(extra);
+    }
+    DeleteMsgPort(cmd_port);
+
+    /* Canonical safe exit: Forbid() before the final ReplyMsg() so
+     * MQTT_DeleteClient() cannot resume and FreeVec() the handle out from
+     * under us until this task has actually finished dying (the caller
+     * returns immediately after this call, ending the process - see
+     * CreateNewProcTags() in MQTT_CreateClient(); no Exit()/RemTask()
+     * needed). */
+    Forbid();
+    ReplyMsg(&cm->cm_Msg);
+}
+
+/* Backoff schedule for mco_AutoReconnect (see libraries/mqtt.h): 1s, 2s,
+ * 4s, ... capped at 32s, retried forever. */
+#define MQTT_LIB_RECONNECT_INITIAL_MS 1000
+#define MQTT_LIB_RECONNECT_MAX_MS    32000
+
+/* Delay() chunk while waiting out a backoff interval - AmigaOS Delay() ticks
+ * are 1/50s, so Delay(10) is ~0.2s (same convention as tests/library/
+ * libnet.c's own POLL_TICKS) - short enough that a command arriving on
+ * cmd_port mid-wait is never left unanswered for long, per libraries/
+ * mqtt.h's reconnecting-mode contract. */
+#define MQTT_LIB_RECONNECT_POLL_TICKS 10
+
+typedef enum {
+    CHILD_RECONNECT_RESTORED,  /* client/transport live again - caller
+                                   should set have_client = 1 */
+    CHILD_RECONNECT_CANCELLED, /* explicit DISCONNECT arrived - go idle */
+    CHILD_RECONNECT_QUIT       /* QUIT arrived and has been fully handled
+                                   (child_do_quit() already ran) - caller
+                                   must `return;` immediately, touching
+                                   nothing else */
+} child_reconnect_result;
+
+/* --- Drains one command from cmd_port while reconnecting: QUIT and
+ * DISCONNECT are honoured immediately (see libraries/mqtt.h); everything
+ * else fails fast with MQTTERR_NOTCONNECTED without being acted on (no
+ * connection exists to act on it with). Returns the child_reconnect_result
+ * to propagate up if this command ends the reconnect loop (QUIT/
+ * DISCONNECT), or -1 if the loop should keep going. --- */
+static int child_reconnect_drain_one(struct MsgPort *cmd_port,
+                                      MqttCmdMsg *cm, uint8_t *txbuf,
+                                      uint8_t *rxbuf, uint8_t *txbuf2,
+                                      mqtt_client *client, SubNode **subs,
+                                      child_reconnect_result *out)
+{
+    switch (cm->cm_Cmd) {
+    case MQTTCMD_QUIT:
+        child_do_quit(cmd_port, cm, txbuf, rxbuf, txbuf2, 0, client, *subs);
+        *subs = NULL;
+        *out = CHILD_RECONNECT_QUIT;
+        return 1;
+    case MQTTCMD_DISCONNECT:
+        sub_list_free(*subs);
+        *subs = NULL;
+        cm->cm_Result = 0;
+        ReplyMsg(&cm->cm_Msg);
+        *out = CHILD_RECONNECT_CANCELLED;
+        return 1;
+    default:
+        /* PUBLISH/SUBSCRIBE/CONNECT: a reconnect is already in progress in
+         * the background - see libraries/mqtt.h's reconnecting-mode
+         * semantics for why CONNECT is treated the same as the others here
+         * rather than attempting an out-of-band immediate reconnect. */
+        cm->cm_Result = MQTTERR_NOTCONNECTED;
+        ReplyMsg(&cm->cm_Msg);
+        return 0;
+    }
+}
+
+/* --- mco_AutoReconnect state machine: called the instant an established
+ * connection drops (transport error or keepalive timeout - the transport is
+ * already closed by the caller before this is called). Retries
+ * child_connect() + resubscribing every remembered filter with exponential
+ * backoff, forever, until the connection is restored or the caller
+ * intervenes with MQTT_Disconnect()/MQTT_DeleteClient(). --- */
+static child_reconnect_result child_reconnect_loop(
+    MqttClientHandle *h, struct MsgPort *cmd_port, mqtt_client *client,
+    mqtt_transport *transport, bsdsocket_ctx *bctx, uint8_t *txbuf,
+    uint8_t *rxbuf, uint8_t *txbuf2, SubNode **subs)
+{
+    uint32_t backoff_ms = MQTT_LIB_RECONNECT_INITIAL_MS;
+
+    for (;;) {
+        uint32_t wait_start;
+        struct Message *raw;
+        child_reconnect_result out;
+        int rc;
+
+        /* Honour anything already queued before we start (or resume)
+         * waiting out this attempt's backoff. */
+        while ((raw = GetMsg(cmd_port)) != NULL) {
+            if (child_reconnect_drain_one(cmd_port, (MqttCmdMsg *)raw, txbuf,
+                                           rxbuf, txbuf2, client, subs, &out))
+                return out;
+        }
+
+        /* Wait out the backoff interval in small chunks so a queued
+         * command is never left waiting long - never one long Delay(). */
+        wait_start = tool_now_ms();
+        while (tool_now_ms() - wait_start < backoff_ms) {
+            Delay(MQTT_LIB_RECONNECT_POLL_TICKS);
+            while ((raw = GetMsg(cmd_port)) != NULL) {
+                if (child_reconnect_drain_one(cmd_port, (MqttCmdMsg *)raw,
+                                               txbuf, rxbuf, txbuf2, client,
+                                               subs, &out))
+                    return out;
+            }
+        }
+
+        rc = child_connect(h, cmd_port, client, transport, bctx, txbuf, rxbuf);
+        if (rc == 0) {
+            SubNode *n;
+            int hc = 1; /* have_client, local to the resubscribe pass -
+                           child_subscribe_wait() clears it on a pump
+                           failure, mirroring MQTTCMD_SUBSCRIBE's own use */
+            LONG sresult = 0;
+
+            for (n = *subs; n != NULL && hc; n = n->next) {
+                mqtt_str f;
+
+                f.ptr = (const char *)n->filter;
+                f.len = (uint16_t)strlen((const char *)n->filter);
+                sresult = child_subscribe_wait(h, client, transport, &hc, f,
+                                                n->qos);
+                if (sresult != 0)
+                    break;
+            }
+
+            if (sresult == 0)
+                return CHILD_RECONNECT_RESTORED;
+
+            /* Connected, but a resubscribe failed (refused/timed out) or
+             * the pump died mid-resubscribe (hc already 0, transport
+             * already closed by child_subscribe_wait() in that case). */
+            if (hc)
+                transport->close(transport->ctx);
+        }
+
+        backoff_ms *= 2;
+        if (backoff_ms > MQTT_LIB_RECONNECT_MAX_MS)
+            backoff_ms = MQTT_LIB_RECONNECT_MAX_MS;
+    }
+}
+
 /* --- the child subprocess's whole life, from having a command port to
  * MQTTCMD_QUIT --- */
 static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
@@ -203,6 +534,14 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
      * break multiple simultaneous connections. */
     uint16_t next_pub_id = 0x8000;
 
+    /* mco_AutoReconnect: filters MQTT_Subscribe()'d since the last
+     * MQTT_Connect(), for child_reconnect_loop() to reissue after a
+     * reconnect - see mqtt_priv.h and the SubNode helpers above. Only ever
+     * non-empty when h->ch_Opts.mco_AutoReconnect is set (see the
+     * MQTTCMD_SUBSCRIBE case below); freed on explicit MQTTCMD_DISCONNECT
+     * and on MQTTCMD_QUIT (child_do_quit()). */
+    SubNode *subs = NULL;
+
     txbuf = (uint8_t *)AllocVec(MQTT_LIB_TXBUF_SIZE, MEMF_PUBLIC);
     rxbuf = (uint8_t *)AllocVec(MQTT_LIB_RXBUF_SIZE, MEMF_PUBLIC);
     txbuf2 = (uint8_t *)AllocVec(MQTT_LIB_TXBUF2_SIZE, MEMF_PUBLIC);
@@ -215,10 +554,12 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
 
         while ((raw = GetMsg(cmd_port)) != NULL) {
             MqttCmdMsg *cm = (MqttCmdMsg *)raw;
+            int need_reconnect = 0; /* set when a pump failure mid-command
+                                        closes the transport - see the
+                                        common ReplyMsg()+reconnect below */
 
             switch (cm->cm_Cmd) {
             case MQTTCMD_CONNECT: {
-                mqtt_connect_opts co;
                 int rc;
 
                 if (!txbuf || !rxbuf || !txbuf2) {
@@ -226,51 +567,10 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     break;
                 }
 
-                memset(&co, 0, sizeof(co));
-                if (h->ch_Opts.mco_ClientID) {
-                    co.client_id.ptr = (const char *)h->ch_Opts.mco_ClientID;
-                    co.client_id.len =
-                        (uint16_t)strlen((const char *)h->ch_Opts.mco_ClientID);
-                }
-                if (h->ch_Opts.mco_Username) {
-                    co.username.ptr = (const char *)h->ch_Opts.mco_Username;
-                    co.username.len =
-                        (uint16_t)strlen((const char *)h->ch_Opts.mco_Username);
-                    if (h->ch_Opts.mco_Password) {
-                        co.password.ptr = (const char *)h->ch_Opts.mco_Password;
-                        co.password.len =
-                            (uint16_t)strlen((const char *)h->ch_Opts.mco_Password);
-                    }
-                }
-                co.clean_session = h->ch_Opts.mco_CleanSession ? 1 : 0;
-                co.keepalive = h->ch_Opts.mco_KeepAlive;
-
-                if (transport_bsdsocket_connect(&transport, &bctx,
-                        (const char *)h->ch_Host, h->ch_Port) != 0) {
-                    cm->cm_Result = MQTTERR_NOTCONNECTED;
-                    break;
-                }
-                /* Extra wakeup source for recv()'s WaitSelect poll, so a
-                 * PUBLISH/SUBSCRIBE/DISCONNECT/QUIT arriving on cmd_port
-                 * while we're pumping the connection is noticed within
-                 * the poll instead of up to a second late. */
-                bctx.break_sigmask = 1UL << cmd_port->mp_SigBit;
-
-                mqtt_client_init(&client, &transport, &co, txbuf,
-                                  MQTT_LIB_TXBUF_SIZE, rxbuf,
-                                  MQTT_LIB_RXBUF_SIZE);
-                rc = mqtt_client_connect(&client, tool_now_ms());
-                while (rc == 0 &&
-                       mqtt_client_get_state(&client) == MQTT_CS_CONNECTING) {
-                    rc = mqtt_client_process(&client, tool_now_ms(),
-                                              deliver_cb, h);
-                }
-                if (rc != 0 ||
-                    mqtt_client_get_state(&client) != MQTT_CS_CONNECTED) {
-                    cm->cm_Result =
-                        (rc != 0) ? (LONG)rc
-                                  : -(LONG)MQTT_CLIENT_ERR_CONNECT_REFUSED;
-                    transport.close(transport.ctx);
+                rc = child_connect(h, cmd_port, &client, &transport, &bctx,
+                                    txbuf, rxbuf);
+                if (rc != 0) {
+                    cm->cm_Result = (LONG)rc;
                     break;
                 }
 
@@ -332,6 +632,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                             result = MQTTERR_NOTCONNECTED;
                             transport.close(transport.ctx);
                             have_client = 0;
+                            need_reconnect = 1;
                             break;
                         }
 
@@ -350,6 +651,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                                 result = (LONG)rc;
                                 transport.close(transport.ctx);
                                 have_client = 0;
+                                need_reconnect = 1;
                                 done = 1;
                                 break;
                             }
@@ -378,49 +680,15 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     break;
                 }
                 {
-                    LONG result = (LONG)mqtt_client_subscribe(
-                        &client, cm->cm_Topic, cm->cm_Qos);
+                    LONG result = child_subscribe_wait(
+                        h, &client, &transport, &have_client, cm->cm_Topic,
+                        cm->cm_Qos);
 
-                    if (result == 0) {
-                        uint32_t wait_start;
+                    if (result == 0 && h->ch_Opts.mco_AutoReconnect)
+                        sub_list_add(&subs, cm->cm_Topic, cm->cm_Qos);
+                    else if (result != 0 && !have_client)
+                        need_reconnect = 1;
 
-                        /* Core allocates the SUBSCRIBE's packet id
-                         * internally (alloc_packet_id() is file-static in
-                         * mqtt_client.c) and mqtt_client_subscribe() has no
-                         * output parameter for it, so it can't be matched
-                         * exactly without a further core change. Because
-                         * do_command() is synchronous and this handle's
-                         * child only ever has one SUBSCRIBE outstanding at
-                         * a time, matching on "any SUBACK" is sound here -
-                         * see the task notes for this deliberate deviation
-                         * from packet-id matching. */
-                        h->ch_AckSeen = 0;
-                        /* Wrap-safe elapsed-time idiom - see the QoS 1
-                         * PUBACK wait above. */
-                        wait_start = tool_now_ms();
-                        result = MQTTERR_TIMEOUT;
-                        for (;;) {
-                            int rc = mqtt_client_process(&client,
-                                                          tool_now_ms(),
-                                                          deliver_cb, h);
-                            if (rc != 0) {
-                                result = (LONG)rc;
-                                transport.close(transport.ctx);
-                                have_client = 0;
-                                break;
-                            }
-                            if (h->ch_AckSeen &&
-                                h->ch_AckType == MQTT_SUBACK) {
-                                result = (h->ch_AckCode == 0x80)
-                                             ? (LONG)MQTTERR_REFUSED
-                                             : 0;
-                                break;
-                            }
-                            if (tool_now_ms() - wait_start >=
-                                MQTT_LIB_SUBACK_TIMEOUT_MS)
-                                break;
-                        }
-                    }
                     cm->cm_Result = result;
                 }
                 break;
@@ -430,43 +698,15 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     mqtt_client_disconnect(&client);
                     have_client = 0;
                 }
+                sub_list_free(subs);
+                subs = NULL;
                 cm->cm_Result = 0;
                 break;
 
-            case MQTTCMD_QUIT: {
-                struct Message *extra;
-
-                if (have_client) {
-                    mqtt_client_disconnect(&client);
-                    have_client = 0;
-                }
-                if (txbuf)
-                    FreeVec(txbuf);
-                if (rxbuf)
-                    FreeVec(rxbuf);
-                if (txbuf2)
-                    FreeVec(txbuf2);
-
-                /* Defensive: reply anything else queued behind Quit so no
-                 * caller is left waiting forever. In practice there
-                 * should never be one - MQTT_DeleteClient() is documented
-                 * as the only Quit sender, and callers hold the handle
-                 * exclusively - but a stray command here must not hang. */
-                while ((extra = GetMsg(cmd_port)) != NULL) {
-                    ((MqttCmdMsg *)extra)->cm_Result = MQTTERR_NOTCONNECTED;
-                    ReplyMsg(extra);
-                }
-                DeleteMsgPort(cmd_port);
-
-                /* Canonical safe exit: Forbid() before the final ReplyMsg()
-                 * so MQTT_DeleteClient() cannot resume and FreeVec() the
-                 * handle out from under us until this task has actually
-                 * finished dying (returning here ends the process - see
-                 * CreateNewProcTags() below; no Exit()/RemTask() needed). */
-                Forbid();
-                ReplyMsg(&cm->cm_Msg);
+            case MQTTCMD_QUIT:
+                child_do_quit(cmd_port, cm, txbuf, rxbuf, txbuf2, have_client,
+                              &client, subs);
                 return;
-            }
 
             default:
                 cm->cm_Result = MQTTERR_NOTCONNECTED;
@@ -474,6 +714,27 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
             }
 
             ReplyMsg(&cm->cm_Msg);
+
+            /* An established connection just dropped mid-command (PUBLISH's
+             * or SUBSCRIBE's own pump failed) - the caller's command has
+             * already been failed and replied above; mco_AutoReconnect now
+             * takes over restoring the session for *subsequent* calls (see
+             * libraries/mqtt.h). The caller's h->ch_Connected stays 1 across
+             * this - it's caller-task state meaning "MQTT_Connect()
+             * succeeded and no MQTT_Disconnect() since" (see mqtt_priv.h),
+             * only ever cleared by MQTT_Disconnect()/MQTT_DeleteClient(),
+             * so later MQTT_Publish()/MQTT_Subscribe() calls still reach
+             * this child - which answers MQTTERR_NOTCONNECTED itself via
+             * the child_reconnect_drain_one() default case below while the
+             * link is down. */
+            if (need_reconnect && h->ch_Opts.mco_AutoReconnect) {
+                child_reconnect_result r = child_reconnect_loop(
+                    h, cmd_port, &client, &transport, &bctx, txbuf, rxbuf,
+                    txbuf2, &subs);
+                if (r == CHILD_RECONNECT_QUIT)
+                    return;
+                have_client = (r == CHILD_RECONNECT_RESTORED);
+            }
         }
 
         if (have_client) {
@@ -481,6 +742,14 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
             if (rc != 0) {
                 transport.close(transport.ctx);
                 have_client = 0;
+                if (h->ch_Opts.mco_AutoReconnect) {
+                    child_reconnect_result r = child_reconnect_loop(
+                        h, cmd_port, &client, &transport, &bctx, txbuf, rxbuf,
+                        txbuf2, &subs);
+                    if (r == CHILD_RECONNECT_QUIT)
+                        return;
+                    have_client = (r == CHILD_RECONNECT_RESTORED);
+                }
             }
         }
     }
@@ -602,6 +871,7 @@ APTR MQTT_CreateClient(struct Library *_base, STRPTR host, UWORD port,
         }
         h->ch_Opts.mco_KeepAlive = opts->mco_KeepAlive;
         h->ch_Opts.mco_CleanSession = opts->mco_CleanSession;
+        h->ch_Opts.mco_AutoReconnect = opts->mco_AutoReconnect;
     }
     h->ch_Opts.mco_ClientID = h->ch_ClientID;
     h->ch_Opts.mco_Username = h->ch_Username;

@@ -113,4 +113,14 @@ typedef struct MqttClientHandle {
                             PUBACK */
 } MqttClientHandle;
 
+/* --- mco_AutoReconnect (libraries/mqtt.h): remembered-subscriptions list --
+ * The child subprocess (mqtt_funcs.c's child_run()) keeps a singly linked
+ * list of every filter successfully MQTT_Subscribe()'d since the last
+ * MQTT_Connect(), so it can reissue them all after an auto-reconnect. This
+ * is CHILD-task-local state (a child_run() local variable, not a field of
+ * MqttClientHandle above - it is never touched by the caller's task, so it
+ * doesn't need to live in the caller-visible handle). See
+ * mqtt_funcs.c's SubNode/sub_list_add()/sub_list_free()/
+ * child_reconnect_loop(). */
+
 #endif /* MIDGE_MQTT_PRIV_H */

@@ -10,6 +10,8 @@ tests/library/sys/C/libsmoke
 tests/library/sys/Libs/mqtt.library
 tests/library/netsys/C/libnet
 tests/library/netsys/Libs/mqtt.library
+tests/library/reconnsys/C/libreconn
+tests/library/reconnsys/Libs/mqtt.library
 
 # Editor / OS cruft
 .cache/
