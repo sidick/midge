@@ -83,7 +83,7 @@ all: test cli
 # ci.yml calls these five names; each build-test.yml job is independent (no
 # artifact-passing between them). The named targets below (test/cli/m68k/...)
 # stay as the documented local entry points.
-build: m68k
+build: m68k library
 
 test-host: test cli
 
