@@ -4,7 +4,9 @@ midge is a native MQTT 3.1.1 client for classic AmigaOS, aimed at putting
 your Amiga on a modern smart-home network (Home Assistant, Mosquitto, EMQX)
 as both a display/control surface and a publisher of its own telemetry.
 
-This release ships the command-line tools `mqtt_pub` and `mqtt_sub`, and
+This release ships the command-line tools `mqtt_pub` and `mqtt_sub`,
+`mqttstats` (a headless Commodity publishing Amiga telemetry to Home
+Assistant via MQTT discovery - see [mqttstats](mqttstats.md)), and
 `mqtt.library`, a shared library exposing the same MQTT client to other
 AmigaOS programs, with optional TLS via AmiSSL. A ReAction dashboard
 application is planned for a future release.

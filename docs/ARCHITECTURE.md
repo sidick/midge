@@ -16,7 +16,9 @@ src/core/    portable C99, zero OS/libc-beyond-C99 dependencies
 
 src/host/    host-native platform glue (BSD sockets, getopt)
 src/amiga/   AmigaOS platform glue (bsdsocket.library, ReadArgs)
-src/tools/   mqtt_pub/mqtt_sub logic shared by the static host/Amiga builds
+src/tools/   mqtt_pub/mqtt_sub logic shared by the static host/Amiga builds,
+             plus ha_discovery.[ch] (portable Home Assistant MQTT Discovery
+             topic/payload builder, used by mqttstats below)
 src/library/ mqtt.library (see "mqtt.library" below)
 ```
 
@@ -38,6 +40,14 @@ thinner pair of mains (`src/amiga/pub_main_lib.c`/`sub_main_lib.c`) that
 reuse `src/amiga/args.c`'s ReadArgs parsing and `tool_opts` for an
 identical CLI contract, but call through `mqtt.library` instead of linking
 `src/core`/`src/tools` directly - see "Two build flavours" below.
+
+`src/amiga/mqttstats_main.c` is a separate, self-contained Commodity (the
+telemetry piece of the Home Assistant integration - I2C sensor support is
+a deferred follow-up) that links `mqtt.library` and `src/tools/ha_discovery.c`
+directly; it doesn't go through `tool_opts`/ReadArgs at all, since its
+config comes from Workbench ToolTypes via amiga.lib's `ArgArrayInit()`
+instead of a CLI template. See `userdocs/mqttstats.md` for the ToolTypes
+reference and Home Assistant setup.
 
 ## The transport vtable
 

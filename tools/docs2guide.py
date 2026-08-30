@@ -27,6 +27,7 @@ PAGES = [
     ('index', 'midge'),
     ('Installation', 'Installation'),
     ('CLI-Reference', 'CLI Reference'),
+    ('mqttstats', 'mqttstats'),
     ('mqtt-library', 'mqtt.library'),
     ('mqtt-library-reference', 'mqtt.library API Reference'),
 ]
