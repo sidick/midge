@@ -6,14 +6,16 @@ as both a display/control surface and a publisher of its own telemetry.
 
 This release ships the command-line tools `mqtt_pub` and `mqtt_sub`, and
 `mqtt.library`, a shared library exposing the same MQTT client to other
-AmigaOS programs. TLS support and a ReAction dashboard application are
-planned for future releases.
+AmigaOS programs, with optional TLS via AmiSSL. A ReAction dashboard
+application is planned for a future release.
 
 ## Requirements
 
 - AmigaOS 3.1+ (3.2 is the reference platform), 68020 or better.
 - A TCP/IP stack providing `bsdsocket.library` (Roadshow, AmiTCP, Miami, or
   an emulator-provided stack).
+- For TLS: [AmiSSL](https://github.com/jens-maus/amissl) 5.x, installed
+  separately - see [Installation](Installation.md#installing-amissl-needed-for-tls).
 
 See [Installation](Installation.md) for unpacking the archive and the
 `mqtt.library` install step the default tools need.

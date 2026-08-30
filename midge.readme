@@ -30,21 +30,28 @@ This release ships:
 mqtt_pub/mqtt_sub and their -static counterparts all follow the same
 AmigaDOS conventions (ReadArgs templates, Ctrl-C to stop) and speak plain
 MQTT 3.1.1 over TCP. mqtt_pub/mqtt_sub are backed by mqtt.library and
-support QoS 0 and QoS 1 publish; mqtt_pub-static/mqtt_sub-static talk to
-bsdsocket.library directly with no library install required, but
-mqtt_pub-static only supports QoS 0 publish. mqtt.library itself also
-exposes an optional auto-reconnect mode to programs written against it
-directly. See https://sidick.github.io/midge/mqtt-library/ for the full
-mqtt.library guide.
+support QoS 0 and QoS 1 publish, plus TLS via AmiSSL (TLS/TLSINSECURE -
+needs AmiSSL installed separately, see Requirements below);
+mqtt_pub-static/mqtt_sub-static talk to bsdsocket.library directly with no
+library install required, but mqtt_pub-static only supports QoS 0 publish
+and neither -static tool supports TLS. mqtt.library itself also exposes an
+optional auto-reconnect mode to programs written against it directly. See
+https://sidick.github.io/midge/mqtt-library/ for the full mqtt.library
+guide.
 
-Planned for future releases: TLS via AmiSSL, and a ReAction dashboard
-application with Home Assistant MQTT discovery.
+Planned for future releases: a ReAction dashboard application with Home
+Assistant MQTT discovery.
 
 Requirements
 ------------
   - AmigaOS 3.1+ (3.2 is the reference platform), 68020 or better.
   - A TCP/IP stack providing bsdsocket.library (Roadshow, AmiTCP, Miami,
     or an emulator-provided stack).
+  - For TLS (mqtt_pub/mqtt_sub's TLS/TLSINSECURE switches): AmiSSL 5.x
+    (https://github.com/jens-maus/amissl), installed separately - not
+    bundled with this archive. Software TLS is CPU-intensive; a genuinely
+    stock, unaccelerated 68020 may see intermittent failures under it -
+    see https://sidick.github.io/midge/CLI-Reference/ for details.
 
 Quick start
 -----------

@@ -47,6 +47,30 @@ If you'd rather not install anything, use `mqtt_pub-static`/
 [Two build flavours](CLI-Reference.md#two-build-flavours) for exactly what
 that trade-off costs you (QoS 1 publish support).
 
+## Installing AmiSSL (needed for TLS)
+
+`mqtt_pub`/`mqtt_sub`'s `TLS`/`TLSINSECURE` switches (see
+[CLI Reference](CLI-Reference.md)) need
+[AmiSSL](https://github.com/jens-maus/amissl) 5.x installed - it is not
+bundled with this archive. Download the OS3 package from AmiSSL's own
+releases and run its installer; that sets up `LIBS:amisslmaster.library`,
+the CPU-tier `LIBS:AmiSSL/` library, and the `AmiSSL:` assign the TLS
+certificate store is read through. All three matter - a missing `AmiSSL:`
+assign in particular can make AmigaOS pop up a "please insert volume"
+requester instead of a clean connect failure.
+
+Without AmiSSL installed, `TLS`/`TLSINSECURE` fail with a connect error;
+everything else in this release works exactly the same either way - TLS is
+entirely opt-in.
+
+Software TLS is CPU-intensive: a genuinely stock, unaccelerated 68020 has
+been found to intermittently fail under it, while any real accelerator (or
+a 68030 or better) is reliable - see
+[CLI Reference](CLI-Reference.md#a-note-on-tls-and-cpu-speed).
+
+`mqtt_pub-static`/`mqtt_sub-static` have no AmiSSL support at all and
+reject `TLS` outright.
+
 ## Verifying it worked
 
 ```
