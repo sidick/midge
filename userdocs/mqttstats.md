@@ -59,15 +59,22 @@ with the same `CLIENTID` would collide on both.
 
 ### Running from Workbench / WBStartup
 
-Set the ToolTypes on the `mqttstats` icon (Icons > Information, or the
-equivalent in your Workbench version), then either double-click it or drop
-the icon into `WBStartup:` to have it launch silently every boot. Either
-way, nothing appears on screen - if `HOST` is missing or a library fails to
-open, `mqttstats` quits immediately with no visible indication (diagnostics
-go to the serial port only, for anyone debugging under an emulator or with
-a serial cable attached - see [CLI Reference](CLI-Reference.md) for the
-general shape of Amiga tool diagnostics). Check Home Assistant for the
-expected entities to confirm it's actually connected.
+`mqttstats` ships with its own icon (`mqttstats.info` in the archive,
+alongside the binary) - copy both together wherever you put `mqttstats`.
+Open its Information window (Workbench's Icons menu, or right-click on
+some Workbench versions) and set at least `HOST` in the Tool Types list;
+the icon ships with a few common ones already listed as comments (shown
+grayed out, in parentheses) as a reminder of what's available - edit them
+in place to activate. Then either double-click the icon to run it, or drag
+it into `WBStartup:` to have it launch silently every boot.
+
+Either way, nothing appears on screen - if `HOST` is missing or a library
+fails to open, `mqttstats` quits immediately with no visible indication
+(diagnostics go to the serial port only, for anyone debugging under an
+emulator or with a serial cable attached - see
+[CLI Reference](CLI-Reference.md) for the general shape of Amiga tool
+diagnostics). Check Home Assistant for the expected entities to confirm
+it's actually connected.
 
 ### Running from a Shell
 

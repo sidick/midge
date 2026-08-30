@@ -519,6 +519,7 @@ dist: guide $(LHA)
 		$(BUILD)/dist/midge/developer/examples
 	cp $(BUILD)/mqtt_pub $(BUILD)/mqtt_sub $(BUILD)/mqtt_pub-static $(BUILD)/mqtt_sub-static \
 		$(BUILD)/mqttstats $(BUILD)/midge.guide LICENSE midge.readme $(BUILD)/dist/midge/
+	cp icons/mqttstats.info $(BUILD)/dist/midge/mqttstats.info
 	cp $(BUILD)/mqtt.library $(BUILD)/dist/midge/libs/
 	cp src/library/mqtt_lib.sfd src/library/mqtt.doc $(BUILD)/dist/midge/developer/
 	cp $(LIB_INCDIR)/fd/mqtt_lib.fd $(BUILD)/dist/midge/developer/fd/
