@@ -44,6 +44,29 @@
 #include "transport_bsdsocket.h"
 #include "tool_clock.h"
 
+/* MIDGE_AMIGA_TLS is defined by the Makefile only once `make
+ * fetch-amissl-sdk` has populated AMISSL_SDK_DIR (M68K_HAS_AMISSL - see the
+ * Makefile's feature-detect comment, same idiom as the host's
+ * MIDGE_HOST_TLS/HOST_HAS_TLS). Without it, mqtt.library still builds and
+ * works fully - just without mco_TLS support, rejected below like any
+ * other missing capability. */
+#ifdef MIDGE_AMIGA_TLS
+#include "transport_amissl.h"
+#endif
+
+/* One connection's transport context storage, sized for whichever kind
+ * MQTT_CreateClient()'s mco_TLS picked - fixed for the handle's lifetime
+ * (including every reconnect attempt), never both at once, so a union
+ * costs no more stack than the larger of the two members. Kept local to
+ * this file rather than mqtt_priv.h: AmiSSL specifics have no business in
+ * the private header shared with code that never touches a transport. */
+typedef union {
+    bsdsocket_ctx bsd;
+#ifdef MIDGE_AMIGA_TLS
+    amissl_ctx tls;
+#endif
+} mqtt_conn_ctx;
+
 /* Compile-time check that every function below matches the exact signature
  * sfdc generated from mqtt_lib.sfd (struct Library * first, per
  * --libarg=first) - see the Makefile's $(LIB_GENDIR)/libproto.h rule. */
@@ -229,10 +252,11 @@ static void sub_list_free(SubNode *head)
  * failure, mirroring the original inline code). --- */
 static int child_connect(MqttClientHandle *h, struct MsgPort *cmd_port,
                           mqtt_client *client, mqtt_transport *transport,
-                          bsdsocket_ctx *bctx, uint8_t *txbuf, uint8_t *rxbuf)
+                          mqtt_conn_ctx *cctx, uint8_t *txbuf, uint8_t *rxbuf)
 {
     mqtt_connect_opts co;
     int rc;
+    ULONG break_sigmask = 1UL << cmd_port->mp_SigBit;
 
     memset(&co, 0, sizeof(co));
     if (h->ch_Opts.mco_ClientID) {
@@ -253,14 +277,33 @@ static int child_connect(MqttClientHandle *h, struct MsgPort *cmd_port,
     co.clean_session = h->ch_Opts.mco_CleanSession ? 1 : 0;
     co.keepalive = h->ch_Opts.mco_KeepAlive;
 
-    if (transport_bsdsocket_connect(transport, bctx,
-            (const char *)h->ch_Host, h->ch_Port) != 0)
+    /* mco_TLS is fixed for the handle's whole lifetime (set once at
+     * MQTT_CreateClient() time, never toggled by a reconnect), so which
+     * union member is live never changes across repeated child_connect()
+     * calls either. */
+    if (h->ch_Opts.mco_TLS) {
+#ifdef MIDGE_AMIGA_TLS
+        if (transport_amissl_connect(transport, &cctx->tls,
+                (const char *)h->ch_Host, h->ch_Port,
+                h->ch_Opts.mco_TLSInsecure) != 0)
+            return MQTTERR_NOTCONNECTED;
+        /* Extra wakeup source for recv()'s WaitSelect poll, so a
+         * PUBLISH/SUBSCRIBE/DISCONNECT/QUIT arriving on cmd_port while
+         * we're pumping the connection is noticed within the poll instead
+         * of up to a second late - same as the plain-TCP case below. */
+        cctx->tls.break_sigmask = break_sigmask;
+#else
+        /* This build has no AmiSSL SDK (see the MIDGE_AMIGA_TLS comment
+         * above) - fail the same way any other missing capability does,
+         * rather than silently falling back to plaintext. */
         return MQTTERR_NOTCONNECTED;
-    /* Extra wakeup source for recv()'s WaitSelect poll, so a
-     * PUBLISH/SUBSCRIBE/DISCONNECT/QUIT arriving on cmd_port while we're
-     * pumping the connection is noticed within the poll instead of up to a
-     * second late. */
-    bctx->break_sigmask = 1UL << cmd_port->mp_SigBit;
+#endif
+    } else {
+        if (transport_bsdsocket_connect(transport, &cctx->bsd,
+                (const char *)h->ch_Host, h->ch_Port) != 0)
+            return MQTTERR_NOTCONNECTED;
+        cctx->bsd.break_sigmask = break_sigmask;
+    }
 
     mqtt_client_init(client, transport, &co, txbuf, MQTT_LIB_TXBUF_SIZE,
                       rxbuf, MQTT_LIB_RXBUF_SIZE);
@@ -446,7 +489,7 @@ static int child_reconnect_drain_one(struct MsgPort *cmd_port,
  * intervenes with MQTT_Disconnect()/MQTT_DeleteClient(). --- */
 static child_reconnect_result child_reconnect_loop(
     MqttClientHandle *h, struct MsgPort *cmd_port, mqtt_client *client,
-    mqtt_transport *transport, bsdsocket_ctx *bctx, uint8_t *txbuf,
+    mqtt_transport *transport, mqtt_conn_ctx *cctx, uint8_t *txbuf,
     uint8_t *rxbuf, uint8_t *txbuf2, SubNode **subs)
 {
     uint32_t backoff_ms = MQTT_LIB_RECONNECT_INITIAL_MS;
@@ -478,7 +521,7 @@ static child_reconnect_result child_reconnect_loop(
             }
         }
 
-        rc = child_connect(h, cmd_port, client, transport, bctx, txbuf, rxbuf);
+        rc = child_connect(h, cmd_port, client, transport, cctx, txbuf, rxbuf);
         if (rc == 0) {
             SubNode *n;
             int hc = 1; /* have_client, local to the resubscribe pass -
@@ -518,7 +561,7 @@ static child_reconnect_result child_reconnect_loop(
 static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
 {
     uint8_t *txbuf, *rxbuf, *txbuf2;
-    bsdsocket_ctx bctx;
+    mqtt_conn_ctx cctx;
     mqtt_transport transport;
     mqtt_client client;
     int have_client = 0;
@@ -582,7 +625,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                     break;
                 }
 
-                rc = child_connect(h, cmd_port, &client, &transport, &bctx,
+                rc = child_connect(h, cmd_port, &client, &transport, &cctx,
                                     txbuf, rxbuf);
                 if (rc != 0) {
                     cm->cm_Result = (LONG)rc;
@@ -744,7 +787,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
              * link is down. */
             if (need_reconnect && h->ch_Opts.mco_AutoReconnect) {
                 child_reconnect_result r = child_reconnect_loop(
-                    h, cmd_port, &client, &transport, &bctx, txbuf, rxbuf,
+                    h, cmd_port, &client, &transport, &cctx, txbuf, rxbuf,
                     txbuf2, &subs);
                 if (r == CHILD_RECONNECT_QUIT)
                     return;
@@ -759,7 +802,7 @@ static void child_run(MqttClientHandle *h, struct MsgPort *cmd_port)
                 have_client = 0;
                 if (h->ch_Opts.mco_AutoReconnect) {
                     child_reconnect_result r = child_reconnect_loop(
-                        h, cmd_port, &client, &transport, &bctx, txbuf, rxbuf,
+                        h, cmd_port, &client, &transport, &cctx, txbuf, rxbuf,
                         txbuf2, &subs);
                     if (r == CHILD_RECONNECT_QUIT)
                         return;
@@ -887,6 +930,8 @@ APTR MQTT_CreateClient(struct Library *_base, STRPTR host, UWORD port,
         h->ch_Opts.mco_KeepAlive = opts->mco_KeepAlive;
         h->ch_Opts.mco_CleanSession = opts->mco_CleanSession;
         h->ch_Opts.mco_AutoReconnect = opts->mco_AutoReconnect;
+        h->ch_Opts.mco_TLS = opts->mco_TLS;
+        h->ch_Opts.mco_TLSInsecure = opts->mco_TLSInsecure;
     }
     h->ch_Opts.mco_ClientID = h->ch_ClientID;
     h->ch_Opts.mco_Username = h->ch_Username;

@@ -194,11 +194,11 @@ host  - broker hostname or dotted-decimal IP address,
 port  - broker TCP port (1883 is the conventional unencrypted MQTT
         port).
 opts  - connect options (client id, credentials, keepalive,
-        clean-session, mco_AutoReconnect); see struct
-        MqttConnectOpts in <libraries/mqtt.h>. May be NULL, which
-        behaves like a zeroed struct (no client id, no
-        credentials, no keepalive, clean session, no
-        auto-reconnect).
+        clean-session, mco_AutoReconnect, mco_TLS,
+        mco_TLSInsecure); see struct MqttConnectOpts in
+        <libraries/mqtt.h>. May be NULL, which behaves like a
+        zeroed struct (no client id, no credentials, no
+        keepalive, clean session, no auto-reconnect, no TLS).
 
 ### Result
 
@@ -212,6 +212,18 @@ client - a new client handle, or NULL if the handle or its
 
 Creating a client does not touch the network - no socket is
 opened until MQTT_Connect() is called.
+
+mco_TLS connects via AmiSSL instead of a plain TCP transport, if
+this build of mqtt.library was linked with AmiSSL support (see
+the Makefile's M68K_HAS_AMISSL) - otherwise MQTT_Connect() fails
+with MQTTERR_NOTCONNECTED, the same as any other missing
+capability. AmiSSL is CPU-intensive: a genuinely stock,
+unaccelerated 68020 has been found to intermittently fail under
+it (see userdocs/CLI-Reference.md's "A note on TLS and CPU
+speed"). mco_TLSInsecure skips certificate/hostname verification
+and is ignored unless mco_TLS is also set - for testing against
+self-signed or otherwise untrusted brokers only, never for
+production use.
 
 ### See Also
 

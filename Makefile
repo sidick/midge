@@ -52,6 +52,26 @@ HOST_TLS_CFLAGS := $(HOST_SSL_CFLAGS) -DMIDGE_HOST_TLS
 HOST_TLS_LIBS   := $(HOST_SSL_LIBS)
 endif
 
+# Amiga-side TLS transport (src/amiga/transport_amissl.c) links the AmiSSL
+# v5 SDK (headers + libamisslstubs.a) - a proprietary, freely-downloadable
+# archive (scripts/fetch-amissl-sdk.sh), not part of the m68k-amigaos-gcc
+# toolchain itself. Feature-detected exactly like HOST_HAS_TLS above (same
+# rationale: the shared amiga-dev CI image has no AmiSSL SDK, and `library`/
+# `m68k` must still build cleanly there without it) - run
+# `make fetch-amissl-sdk` first to populate AMISSL_SDK_DIR and get TLS
+# support in the next `library`/`m68k` build.
+AMISSL_VERSION  ?= 5.27
+AMISSL_SDK_DIR  ?= .cache/amissl-sdk/amissl-$(AMISSL_VERSION)/sdk/AmiSSL/Developer
+M68K_HAS_AMISSL := $(shell test -f "$(AMISSL_SDK_DIR)/include/openssl/ssl.h" && echo 1)
+ifeq ($(M68K_HAS_AMISSL),1)
+AMISSL_SRCS   := src/amiga/transport_amissl.c
+AMISSL_CFLAGS := -I$(AMISSL_SDK_DIR)/include -DMIDGE_AMIGA_TLS
+AMISSL_LIBS   := -L$(AMISSL_SDK_DIR)/lib/AmigaOS3 -lamisslstubs
+endif
+
+fetch-amissl-sdk:
+	scripts/fetch-amissl-sdk.sh
+
 # --- m68k cross toolchain (Amiga build) ---
 # Baseline per the project spec is 68020 (not 68000 - see CLAUDE.md).
 M68K_CC     ?= m68k-amigaos-gcc
@@ -262,14 +282,20 @@ LIBINIT_O := /opt/amiga/m68k-amigaos/libnix/lib/libinit.o
 
 library: $(BUILD)/mqtt.library
 
+# AMISSL_SRCS/_CFLAGS/_LIBS are empty unless `make fetch-amissl-sdk` has
+# populated AMISSL_SDK_DIR (see the feature-detect comment above) - the
+# library still links fine without them, just without mco_TLS support
+# (transport_amissl_connect() unreferenced, so nothing pulls it in).
 $(BUILD)/mqtt.library: $(LIB_SRCS) $(CORE_SRCS) src/amiga/transport_bsdsocket.c src/amiga/clock.c \
+		$(AMISSL_SRCS) \
 		$(LIB_HDRS) $(CORE_HDRS) $(AMIGA_HDRS) \
 		$(LIB_GENDIR)/gatestubs.c $(LIB_GENDIR)/libproto.h | $(BUILD)/.dir
-	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -nostartfiles \
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(AMISSL_CFLAGS) -nostartfiles \
 		-Isrc/library/include -I$(LIB_GENDIR) \
 		$(LIBINIT_O) $(LIB_SRCS) $(CORE_SRCS) \
-		src/amiga/transport_bsdsocket.c src/amiga/clock.c \
+		src/amiga/transport_bsdsocket.c src/amiga/clock.c $(AMISSL_SRCS) \
 		$(LIB_GENDIR)/gatestubs.c \
+		$(AMISSL_LIBS) \
 		-o $@
 
 # --- mqtt.library: example caller programs (developer-facing, shipped in

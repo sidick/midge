@@ -39,6 +39,25 @@ struct MqttConnectOpts {
     STRPTR mco_Password;      /* NULL = no password; ignored if Username is NULL */
     UWORD  mco_KeepAlive;     /* seconds; 0 disables keepalive PINGREQ */
     BOOL   mco_CleanSession;  /* TRUE = clean session (the common case) */
+    BOOL   mco_TLS;           /* TRUE = connect via AmiSSL instead of a plain
+                                  TCP transport (opt-in, never default-on -
+                                  see issue #3). Certificate and hostname
+                                  verification are on by default. Requires
+                                  amisslmaster.library and an AmiSSL: assign
+                                  (see the amissl package's own install
+                                  docs); MQTT_Connect() fails with
+                                  MQTTERR_NOTCONNECTED if either is
+                                  missing, same as any other connect
+                                  failure. See userdocs/CLI-Reference.md's
+                                  "A note on TLS and CPU speed" - AmiSSL is
+                                  CPU-intensive and a genuinely stock,
+                                  unaccelerated 68020 may see intermittent
+                                  failures under it. */
+    BOOL   mco_TLSInsecure;   /* TRUE = skip certificate/hostname
+                                  verification (SSL_VERIFY_NONE). Ignored
+                                  unless mco_TLS is also TRUE. For testing
+                                  against self-signed or otherwise untrusted
+                                  brokers only - never for production use. */
     BOOL   mco_AutoReconnect; /* FALSE (default/zeroed struct) = today's
                                   behaviour: an unexpected connection drop
                                   (transport error, keepalive timeout) leaves
