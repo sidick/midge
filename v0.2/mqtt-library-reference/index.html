@@ -1,0 +1,2714 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A native MQTT 3.1.1 client for classic AmigaOS">
+      
+      
+      
+        <link rel="canonical" href="https://sidick.github.io/midge/v0.2/mqtt-library-reference/">
+      
+      
+        <link rel="prev" href="../mqtt-library/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>mqtt.library API Reference - midge</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mqttlibrary-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="midge" class="md-header__button md-logo" aria-label="midge" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            midge
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              mqtt.library API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sidick/midge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sidick/midge
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="midge" class="md-nav__button md-logo" aria-label="midge" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    midge
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sidick/midge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sidick/midge
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLI-Reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mqtt.library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mqtt.library API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mqtt.library API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#threading-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threading Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qos-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QoS Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-reconnect-mco_autoreconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Reconnect (mco_AutoReconnect)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_createclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_CreateClient
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_CreateClient">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_deleteclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_DeleteClient
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_DeleteClient">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Connect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Connect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Publish
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Publish">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Subscribe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Subscribe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_getmessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_GetMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_GetMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_freemessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_FreeMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_FreeMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_disconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Disconnect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Disconnect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#threading-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threading Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qos-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QoS Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-reconnect-mco_autoreconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Reconnect (mco_AutoReconnect)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_createclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_CreateClient
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_CreateClient">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_deleteclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_DeleteClient
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_DeleteClient">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Connect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Connect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Publish
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Publish">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Subscribe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Subscribe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_getmessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_GetMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_GetMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_freemessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_FreeMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_FreeMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt_disconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT_Disconnect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT_Disconnect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#name_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synopsis_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synopsis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notes_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#see-also_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/sidick/midge/edit/main/userdocs/mqtt-library-reference.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="mqttlibrary-api-reference">mqtt.library API reference<a class="headerlink" href="#mqttlibrary-api-reference" title="Permanent link">&para;</a></h1>
+<!-- Generated by tools/autodoc2md.py from src/library/mqtt.doc - edit that file and run `make api-reference`, not this one. -->
+
+<p>This page is the same reference shipped as <code>mqtt.doc</code> in the release archive's <code>developer/</code> directory, generated here so it also shows up in the web docs. See <a href="../mqtt-library/">mqtt.library</a> for the narrative guide (installing it, the threading model, auto-reconnect) - this page is the function-by-function reference.</p>
+<h2 id="background">Background<a class="headerlink" href="#background" title="Permanent link">&para;</a></h2>
+<h3 id="name">Name<a class="headerlink" href="#name" title="Permanent link">&para;</a></h3>
+<p>mqtt.library -- MQTT 3.1.1 client for classic AmigaOS (V1)</p>
+<h3 id="function">Function<a class="headerlink" href="#function" title="Permanent link">&para;</a></h3>
+<p>mqtt.library gives any AmigaOS program a native MQTT 3.1.1 client:
+connect to a broker, publish, subscribe, and receive messages,
+without linking any protocol code of your own. It is the shared
+library counterpart to the mqtt_pub/mqtt_sub command-line tools
+that ship alongside it - all three sit on top of the same portable
+MQTT codec and client state machine.</p>
+<h3 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h3>
+<p>Every APTR client handle returned by MQTT_CreateClient() is backed
+by its own dedicated AmigaOS subprocess, spawned by
+MQTT_CreateClient() and torn down by MQTT_DeleteClient(). That
+subprocess owns the bsdsocket.library connection and drives the
+MQTT client state machine; the calling task never touches the
+socket directly. This exists because bsdsocket.library handles are
+per-task - a shared library has no task of its own to own one in,
+so each client gets a small task-equivalent that can.</p>
+<p>The caller's task and its client's subprocess talk over two
+Exec message ports:</p>
+<ul>
+<li>A CALLER-owned delivery port, on which the subprocess PutMsg()s
+  one struct MqttMessage per incoming PUBLISH. MQTT_GetMessage()
+  simply GetMsg()s this port.</li>
+<li>A CHILD-owned command port, on which the caller PutMsg()s a
+  request (connect/publish/subscribe/disconnect) and Wait()s for
+  the reply. Every MQTT_* call that talks to the subprocess this
+  way (MQTT_Connect, MQTT_Publish, MQTT_Subscribe,
+  MQTT_Disconnect) is therefore synchronous from the caller's
+  point of view: it blocks until the subprocess has finished
+  that step (including, for a QoS 1 publish, waiting for the
+  broker's acknowledgement) and returns its result.</li>
+</ul>
+<h3 id="threading-model">Threading Model<a class="headerlink" href="#threading-model" title="Permanent link">&para;</a></h3>
+<p>A client handle is owned by exactly one caller task - the one that
+called MQTT_CreateClient(). Every other call on that handle,
+including MQTT_GetMessage(), MQTT_FreeMessage(), and
+MQTT_DeleteClient(), must be made from that same task: the
+handle's delivery message port is a caller-task-owned Exec
+resource, and Exec message ports are not safe to share across
+tasks. A program that wants MQTT traffic on more than one task
+needs one client handle (one MQTT_CreateClient() call) per task.</p>
+<h3 id="qos-support">QoS Support<a class="headerlink" href="#qos-support" title="Permanent link">&para;</a></h3>
+<p>QoS 0 and QoS 1 only. QoS 2 is deliberately out of scope for this
+library, exactly as it is for mqtt_pub/mqtt_sub (see the project's
+docs/PROTOCOL.md) - MQTT_Publish() rejects a qos argument greater
+than 1.</p>
+<ul>
+<li>QoS 0 publish: fire-and-forget. MQTT_Publish() returns as soon
+  as the PUBLISH packet has been written to the transport; no
+  broker acknowledgement is waited for.</li>
+<li>QoS 1 publish: MQTT_Publish() returns only once the broker's
+  PUBACK has arrived, retransmitting (DUP flag set) roughly
+  every 5 seconds, up to 3 retransmits (4 sends total, ~15-20
+  seconds worst case) before giving up. Because each client
+  handle's commands are synchronous, at most one QoS 1 publish
+  is ever outstanding per handle.</li>
+<li>Subscribe: MQTT_Subscribe() returns only once the broker's
+  SUBACK has granted the subscription (or refused it, or ~10
+  seconds have passed with no SUBACK at all).</li>
+<li>Incoming messages of either QoS are delivered identically via
+  MQTT_GetMessage() - see struct MqttMessage's mm_Qos field for
+  the QoS the broker actually delivered at (MQTT delivery QoS is
+  min(subscribe QoS, publish QoS), same as the wire protocol).</li>
+</ul>
+<h3 id="auto-reconnect-mco_autoreconnect">Auto-Reconnect (mco_AutoReconnect)<a class="headerlink" href="#auto-reconnect-mco_autoreconnect" title="Permanent link">&para;</a></h3>
+<p>struct MqttConnectOpts's mco_AutoReconnect field, passed to
+MQTT_CreateClient(), controls what happens after an <em>unexpected</em>
+connection drop (a transport error, or a keepalive timeout) once
+MQTT_Connect() has already succeeded once:</p>
+<ul>
+<li>FALSE (the default for a zeroed struct): today's plain
+  behaviour. The client stays disconnected until the caller
+  makes a fresh, explicit MQTT_Connect() call.</li>
+<li>TRUE: the client's own subprocess re-establishes the
+  connection by itself, with exponential backoff (1s, 2s, 4s,
+  ... capped at 32 seconds, retried forever), and automatically
+  re-issues every MQTT_Subscribe() filter made since the last
+  MQTT_Connect() on each successful reconnect. An explicit
+  MQTT_Disconnect() or a failed <em>initial</em> MQTT_Connect() does
+  NOT trigger this - only a drop after a successful connect
+  does.</li>
+</ul>
+<p>While a reconnect is in progress, MQTT_Publish() and
+MQTT_Subscribe() both fail fast with MQTTERR_NOTCONNECTED (nothing
+is queued for later delivery), and a second MQTT_Connect() call
+made mid-reconnect also fails fast the same way, rather than
+racing the background attempt. MQTT_GetMessage() is unaffected: it
+keeps returning any messages already queued, and any a successful
+reconnect goes on to deliver - it never itself fails.
+MQTT_Disconnect() and MQTT_DeleteClient() both cancel an
+in-progress reconnect immediately.</p>
+<h3 id="error-codes">Error Codes<a class="headerlink" href="#error-codes" title="Permanent link">&para;</a></h3>
+<pre><code>Every MQTT_* function that returns a status returns 0
+(MQTTERR_OK) on success and a negative code on failure. Two
+families of negative codes are possible:
+
+  - Codes originating in the library's own subprocess/IPC
+    plumbing, defined in &lt;libraries/mqtt.h&gt;:
+
+      MQTTERR_OK             0   Success.
+      MQTTERR_NOMEM        -200  AllocVec()/CreateMsgPort()/process
+                                  spawn failed for lack of memory.
+      MQTTERR_NOSTACK      -201  Reserved: MQTT_CreateClient() has
+                                  no error-code return channel (it
+                                  returns APTR, bare NULL on every
+                                  failure, including a
+                                  CreateNewProcTags() failure) -
+                                  this code is never actually
+                                  returned today.
+      MQTTERR_NOTCONNECTED -202  Called before MQTT_Connect() has
+                                  succeeded, after
+                                  MQTT_Disconnect(), or while
+                                  mco_AutoReconnect is mid-
+                                  reconnect (see above).
+      MQTTERR_TIMEOUT      -203  MQTT_Publish() at QoS 1: no
+                                  PUBACK within the retry budget.
+                                  MQTT_Subscribe(): no SUBACK
+                                  within ~10 seconds.
+      MQTTERR_REFUSED      -204  MQTT_Subscribe(): the broker's
+                                  SUBACK refused the subscription
+                                  (return code 0x80).
+      MQTTERR_STATE        -205  MQTT_Connect() called on a handle
+                                  that is already connected.
+
+  - Codes passed straight through from the portable core
+    (src/core/mqtt_packet.h's mqtt_err and src/core/mqtt_client.h's
+    mqtt_client_err, both returned as negative values here) when
+    the failure originates below the library's own plumbing - a
+    malformed packet, a rejected CONNECT, a transport error, and
+    so on. See those two headers in the project's source for the
+    exact list; from a caller's point of view the only thing that
+    matters is that any negative return is a failure and 0 is
+    success.
+</code></pre>
+<h3 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h3>
+<p>MQTT_CreateClient, MQTT_Connect, MQTT_Publish, MQTT_Subscribe,
+MQTT_GetMessage, MQTT_Disconnect, MQTT_DeleteClient</p>
+<h2 id="mqtt_createclient">MQTT_CreateClient<a class="headerlink" href="#mqtt_createclient" title="Permanent link">&para;</a></h2>
+<h3 id="name_1">Name<a class="headerlink" href="#name_1" title="Permanent link">&para;</a></h3>
+<p>MQTT_CreateClient -- create a new MQTT client handle (V1)</p>
+<h3 id="synopsis">Synopsis<a class="headerlink" href="#synopsis" title="Permanent link">&para;</a></h3>
+<pre><code>client = MQTT_CreateClient(host, port, opts)
+D0                          A0    D0    A1
+
+APTR MQTT_CreateClient(STRPTR, UWORD, struct MqttConnectOpts *);
+</code></pre>
+<h3 id="function_1">Function<a class="headerlink" href="#function_1" title="Permanent link">&para;</a></h3>
+<p>Allocates a new MQTT client handle and spawns the dedicated
+AmigaOS subprocess that will own its bsdsocket.library connection
+(see mqtt.library/--background--). The handle is not yet
+connected to anything - call MQTT_Connect() next.</p>
+<p>Every string field of <code>opts</code> (mco_ClientID, mco_Username,
+mco_Password) is deep-copied before this call returns, so <code>opts</code>
+and everything it points at may be freed or reused by the caller
+immediately afterwards.</p>
+<h3 id="inputs">Inputs<a class="headerlink" href="#inputs" title="Permanent link">&para;</a></h3>
+<p>host  - broker hostname or dotted-decimal IP address,
+        NUL-terminated. Must not be NULL.
+port  - broker TCP port (1883 is the conventional unencrypted MQTT
+        port).
+opts  - connect options (client id, credentials, keepalive,
+        clean-session, mco_AutoReconnect, mco_TLS,
+        mco_TLSInsecure, mco_CAFile); see struct MqttConnectOpts
+        in <libraries/mqtt.h>. May be NULL, which behaves like a
+        zeroed struct (no client id, no credentials, no
+        keepalive, clean session, no auto-reconnect, no TLS).</p>
+<h3 id="result">Result<a class="headerlink" href="#result" title="Permanent link">&para;</a></h3>
+<p>client - a new client handle, or NULL if the handle or its
+         subprocess could not be created (out of memory, or
+         CreateNewProcTags() failed). The returned handle belongs
+         to the calling task - see mqtt.library/--background--'s
+         THREADING MODEL section.</p>
+<h3 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
+<p>Creating a client does not touch the network - no socket is
+opened until MQTT_Connect() is called.</p>
+<p>mco_TLS connects via AmiSSL instead of a plain TCP transport, if
+this build of mqtt.library was linked with AmiSSL support (see
+the Makefile's M68K_HAS_AMISSL) - otherwise MQTT_Connect() fails
+with MQTTERR_NOTCONNECTED, the same as any other missing
+capability. AmiSSL is CPU-intensive: a genuinely stock,
+unaccelerated 68020 has been found to intermittently fail under
+it (see userdocs/CLI-Reference.md's "A note on TLS and CPU
+speed"). mco_TLSInsecure skips certificate/hostname verification
+and is ignored unless mco_TLS is also set - for testing against
+self-signed or otherwise untrusted brokers only, never for
+production use.</p>
+<p>mco_CAFile (issue #13) additionally trusts a PEM file's CA
+alongside AmiSSL's bundled trust store - for a broker behind a
+private CA that isn't in it. Certificate verification checks the
+broker cert's validity dates against the Amiga's own system
+clock, same as any TLS client - a system clock that's wrong
+(common on real hardware with a dead or unset battery-backed
+RTC) will make a perfectly good certificate look not-yet-valid
+or expired and fail the handshake. Set the clock (SetClock,
+IControl, or NTP via a suitable client) before relying on
+certificate verification.</p>
+<h3 id="see-also_1">See Also<a class="headerlink" href="#see-also_1" title="Permanent link">&para;</a></h3>
+<p>MQTT_Connect, MQTT_DeleteClient</p>
+<h2 id="mqtt_deleteclient">MQTT_DeleteClient<a class="headerlink" href="#mqtt_deleteclient" title="Permanent link">&para;</a></h2>
+<h3 id="name_2">Name<a class="headerlink" href="#name_2" title="Permanent link">&para;</a></h3>
+<p>MQTT_DeleteClient -- destroy a client handle and free its
+resources (V1)</p>
+<h3 id="synopsis_1">Synopsis<a class="headerlink" href="#synopsis_1" title="Permanent link">&para;</a></h3>
+<pre><code>MQTT_DeleteClient(client)
+                   A0
+
+VOID MQTT_DeleteClient(APTR);
+</code></pre>
+<h3 id="function_2">Function<a class="headerlink" href="#function_2" title="Permanent link">&para;</a></h3>
+<p>Disconnects <code>client</code> if it is still connected (equivalent to
+calling MQTT_Disconnect() first), cancels any in-progress
+mco_AutoReconnect reconnect attempt, terminates its subprocess,
+and frees every resource associated with the handle, including
+any undelivered messages still queued on its delivery port. Any
+struct MqttMessage the caller already obtained via
+MQTT_GetMessage() and has not yet freed remains the caller's
+responsibility to free with MQTT_FreeMessage() - MQTT_DeleteClient()
+only frees messages still queued, not ones already handed out.</p>
+<p>After this call, <code>client</code> must not be used again.</p>
+<h3 id="inputs_1">Inputs<a class="headerlink" href="#inputs_1" title="Permanent link">&para;</a></h3>
+<p>client - a handle from MQTT_CreateClient(). NULL is accepted and
+         does nothing.</p>
+<h3 id="result_1">Result<a class="headerlink" href="#result_1" title="Permanent link">&para;</a></h3>
+<p>None.</p>
+<h3 id="notes_1">Notes<a class="headerlink" href="#notes_1" title="Permanent link">&para;</a></h3>
+<p>Must be called from the same task that created the handle - see
+mqtt.library/--background--'s THREADING MODEL section. This call
+blocks until the client's subprocess has actually finished
+terminating.</p>
+<h3 id="see-also_2">See Also<a class="headerlink" href="#see-also_2" title="Permanent link">&para;</a></h3>
+<p>MQTT_CreateClient, MQTT_Disconnect</p>
+<h2 id="mqtt_connect">MQTT_Connect<a class="headerlink" href="#mqtt_connect" title="Permanent link">&para;</a></h2>
+<h3 id="name_3">Name<a class="headerlink" href="#name_3" title="Permanent link">&para;</a></h3>
+<p>MQTT_Connect -- open the TCP connection and perform the MQTT
+CONNECT/CONNACK handshake (V1)</p>
+<h3 id="synopsis_2">Synopsis<a class="headerlink" href="#synopsis_2" title="Permanent link">&para;</a></h3>
+<pre><code>result = MQTT_Connect(client)
+D0                     A0
+
+LONG MQTT_Connect(APTR);
+</code></pre>
+<h3 id="function_3">Function<a class="headerlink" href="#function_3" title="Permanent link">&para;</a></h3>
+<p>Opens a bsdsocket.library TCP connection to the host/port given
+to MQTT_CreateClient(), sends an MQTT CONNECT packet built from
+the connect options given at that time, and waits for the
+broker's CONNACK. Returns once the client is fully connected or
+the attempt has definitively failed.</p>
+<p>Calling MQTT_Connect() again while mco_AutoReconnect is already
+reconnecting in the background fails fast with
+MQTTERR_NOTCONNECTED, rather than racing that attempt - see
+mqtt.library/--background--'s AUTO-RECONNECT section.</p>
+<p>Calling MQTT_Connect() again on a handle that is already connected
+fails fast with MQTTERR_STATE and leaves the existing connection
+untouched - call MQTT_Disconnect() first if a fresh connection is
+wanted.</p>
+<h3 id="inputs_2">Inputs<a class="headerlink" href="#inputs_2" title="Permanent link">&para;</a></h3>
+<p>client - a handle from MQTT_CreateClient().</p>
+<h3 id="result_2">Result<a class="headerlink" href="#result_2" title="Permanent link">&para;</a></h3>
+<p>result - 0 (MQTTERR_OK) on success; a negative error code on
+          failure. See mqtt.library/--background--'s ERROR CODES
+          section.</p>
+<h3 id="notes_2">Notes<a class="headerlink" href="#notes_2" title="Permanent link">&para;</a></h3>
+<p>Once this call has succeeded, if mco_AutoReconnect was set at
+MQTT_CreateClient() time, any <em>later</em> unexpected drop is handled
+automatically by the client's own subprocess - there is no need
+to call MQTT_Connect() again after such a drop.</p>
+<h3 id="see-also_3">See Also<a class="headerlink" href="#see-also_3" title="Permanent link">&para;</a></h3>
+<p>MQTT_CreateClient, MQTT_Disconnect</p>
+<h2 id="mqtt_publish">MQTT_Publish<a class="headerlink" href="#mqtt_publish" title="Permanent link">&para;</a></h2>
+<h3 id="name_4">Name<a class="headerlink" href="#name_4" title="Permanent link">&para;</a></h3>
+<p>MQTT_Publish -- publish a message to a topic (V1)</p>
+<h3 id="synopsis_3">Synopsis<a class="headerlink" href="#synopsis_3" title="Permanent link">&para;</a></h3>
+<pre><code>result = MQTT_Publish(client, topic, payload, len, retain, qos)
+D0                     A0     A1     A2       D0   D1      D2
+
+LONG MQTT_Publish(APTR, STRPTR, APTR, ULONG, LONG, UBYTE);
+</code></pre>
+<h3 id="function_4">Function<a class="headerlink" href="#function_4" title="Permanent link">&para;</a></h3>
+<p>Publishes <code>len</code> bytes at <code>payload</code> to <code>topic</code>, at the requested
+QoS. At QoS 0 this returns as soon as the packet is written to
+the transport; at QoS 1 it returns only once the broker's PUBACK
+has arrived (retransmitting a few times first if needed). See
+mqtt.library/--background--'s QOS SUPPORT section for the exact
+timing and retry budget.</p>
+<h3 id="inputs_3">Inputs<a class="headerlink" href="#inputs_3" title="Permanent link">&para;</a></h3>
+<p>client  - a handle from MQTT_CreateClient(), already connected
+          via MQTT_Connect().
+topic   - the topic to publish to, NUL-terminated. Must not be
+          NULL.
+payload - the message body. May be any bytes (not required to be
+          text); may be NULL only if len is 0.
+len     - number of bytes at <code>payload</code>.
+retain  - non-zero to ask the broker to retain this message as
+          the topic's last-known value for future subscribers;
+          zero for a normal (non-retained) publish.
+qos     - 0 or 1. Any other value is rejected. QoS 2 is out of
+          scope for this library (see docs/PROTOCOL.md).</p>
+<h3 id="result_3">Result<a class="headerlink" href="#result_3" title="Permanent link">&para;</a></h3>
+<p>result - 0 (MQTTERR_OK) on success; a negative error code on
+          failure (including MQTTERR_TIMEOUT if a QoS 1 publish's
+          PUBACK never arrived, or MQTTERR_NOTCONNECTED if the
+          client is not currently connected, including while
+          mco_AutoReconnect is mid-reconnect). See
+          mqtt.library/--background--'s ERROR CODES section.</p>
+<h3 id="notes_3">Notes<a class="headerlink" href="#notes_3" title="Permanent link">&para;</a></h3>
+<p>Because each client handle's commands are synchronous, at most
+one QoS 1 publish is ever outstanding per handle - a second
+MQTT_Publish() call cannot be made until the first has returned.
+A program that needs concurrent publishes should use more than
+one client handle (each on its own task; see the THREADING MODEL
+section).</p>
+<h3 id="see-also_4">See Also<a class="headerlink" href="#see-also_4" title="Permanent link">&para;</a></h3>
+<p>MQTT_Connect, MQTT_Subscribe</p>
+<h2 id="mqtt_subscribe">MQTT_Subscribe<a class="headerlink" href="#mqtt_subscribe" title="Permanent link">&para;</a></h2>
+<h3 id="name_5">Name<a class="headerlink" href="#name_5" title="Permanent link">&para;</a></h3>
+<p>MQTT_Subscribe -- subscribe to a topic filter (V1)</p>
+<h3 id="synopsis_4">Synopsis<a class="headerlink" href="#synopsis_4" title="Permanent link">&para;</a></h3>
+<pre><code>result = MQTT_Subscribe(client, filter, qos)
+D0                       A0     A1      D0
+
+LONG MQTT_Subscribe(APTR, STRPTR, UBYTE);
+</code></pre>
+<h3 id="function_5">Function<a class="headerlink" href="#function_5" title="Permanent link">&para;</a></h3>
+<p>Sends an MQTT SUBSCRIBE for <code>filter</code> at the requested QoS and
+waits for the broker's SUBACK. Once this returns 0, messages
+published to any topic matching <code>filter</code> (which may use the MQTT
+wildcards <code>+</code> and <code>#</code>) start arriving via MQTT_GetMessage().</p>
+<p>If mco_AutoReconnect was set at MQTT_CreateClient() time, this
+filter is remembered and automatically re-subscribed after any
+future reconnect - no need to call MQTT_Subscribe() again after
+a drop.</p>
+<h3 id="inputs_4">Inputs<a class="headerlink" href="#inputs_4" title="Permanent link">&para;</a></h3>
+<p>client - a handle from MQTT_CreateClient(), already connected via
+         MQTT_Connect().
+filter - the topic filter to subscribe to, NUL-terminated (MQTT
+         wildcards <code>+</code>/<code>#</code> allowed). Must not be NULL.
+qos    - the maximum QoS requested for this subscription (0 or
+         1). The broker may grant a lower QoS than requested;
+         delivered messages report the QoS actually used in
+         struct MqttMessage's mm_Qos field.</p>
+<h3 id="result_4">Result<a class="headerlink" href="#result_4" title="Permanent link">&para;</a></h3>
+<p>result - 0 (MQTTERR_OK) on success; MQTTERR_REFUSED if the broker
+          refused the subscription (SUBACK return code 0x80);
+          MQTTERR_TIMEOUT if no SUBACK arrived within ~10 seconds;
+          MQTTERR_NOTCONNECTED if the client is not currently
+          connected. See mqtt.library/--background--'s ERROR
+          CODES section.</p>
+<h3 id="notes_4">Notes<a class="headerlink" href="#notes_4" title="Permanent link">&para;</a></h3>
+<p>A single client handle may hold more than one active
+subscription - call MQTT_Subscribe() once per filter.</p>
+<h3 id="see-also_5">See Also<a class="headerlink" href="#see-also_5" title="Permanent link">&para;</a></h3>
+<p>MQTT_Connect, MQTT_Publish, MQTT_GetMessage</p>
+<h2 id="mqtt_getmessage">MQTT_GetMessage<a class="headerlink" href="#mqtt_getmessage" title="Permanent link">&para;</a></h2>
+<h3 id="name_6">Name<a class="headerlink" href="#name_6" title="Permanent link">&para;</a></h3>
+<p>MQTT_GetMessage -- retrieve the next queued incoming message
+(V1)</p>
+<h3 id="synopsis_5">Synopsis<a class="headerlink" href="#synopsis_5" title="Permanent link">&para;</a></h3>
+<pre><code>msg = MQTT_GetMessage(client)
+D0                     A0
+
+struct MqttMessage *MQTT_GetMessage(APTR);
+</code></pre>
+<h3 id="function_6">Function<a class="headerlink" href="#function_6" title="Permanent link">&para;</a></h3>
+<p>Returns the next message delivered on any of this client's
+active subscriptions, in FIFO order, or NULL if none is
+currently queued. This call never blocks - it is a poll, meant
+to be called periodically (e.g. in a loop with a short Delay()
+between calls, checking for Ctrl-C between polls) rather than
+waited on.</p>
+<h3 id="inputs_5">Inputs<a class="headerlink" href="#inputs_5" title="Permanent link">&para;</a></h3>
+<p>client - a handle from MQTT_CreateClient().</p>
+<h3 id="result_5">Result<a class="headerlink" href="#result_5" title="Permanent link">&para;</a></h3>
+<p>msg - a pointer to a library-allocated struct MqttMessage (see
+      <libraries/mqtt.h> for its mm_Topic/mm_Payload/
+      mm_PayloadLen/mm_Qos/mm_Retain fields), or NULL if no
+      message is currently queued.</p>
+<h3 id="notes_5">Notes<a class="headerlink" href="#notes_5" title="Permanent link">&para;</a></h3>
+<p>Every non-NULL result must eventually be passed to
+MQTT_FreeMessage() - never FreeVec() it directly, and never
+ReplyMsg() its embedded mm_Msg (it is unused). This call always
+succeeds in the sense of never failing outright, including while
+mco_AutoReconnect is mid-reconnect - it simply returns NULL more
+often until the connection (and message flow) is restored.</p>
+<h3 id="see-also_6">See Also<a class="headerlink" href="#see-also_6" title="Permanent link">&para;</a></h3>
+<p>MQTT_Subscribe, MQTT_FreeMessage</p>
+<h2 id="mqtt_freemessage">MQTT_FreeMessage<a class="headerlink" href="#mqtt_freemessage" title="Permanent link">&para;</a></h2>
+<h3 id="name_7">Name<a class="headerlink" href="#name_7" title="Permanent link">&para;</a></h3>
+<p>MQTT_FreeMessage -- free a message returned by MQTT_GetMessage()
+(V1)</p>
+<h3 id="synopsis_6">Synopsis<a class="headerlink" href="#synopsis_6" title="Permanent link">&para;</a></h3>
+<pre><code>MQTT_FreeMessage(client, msg)
+                  A0     A1
+
+VOID MQTT_FreeMessage(APTR, struct MqttMessage *);
+</code></pre>
+<h3 id="function_7">Function<a class="headerlink" href="#function_7" title="Permanent link">&para;</a></h3>
+<p>Frees a struct MqttMessage previously returned by
+MQTT_GetMessage(), including its topic and payload storage (all
+one allocation - the library's internal layout is not part of
+the API, so never FreeVec() a message directly).</p>
+<h3 id="inputs_6">Inputs<a class="headerlink" href="#inputs_6" title="Permanent link">&para;</a></h3>
+<p>client - the handle the message came from. (Reserved for future
+         use; the current implementation does not need it to
+         free the message, but always pass the correct handle.)
+msg    - a message from MQTT_GetMessage(). NULL is accepted and
+         does nothing.</p>
+<h3 id="result_6">Result<a class="headerlink" href="#result_6" title="Permanent link">&para;</a></h3>
+<p>None.</p>
+<h3 id="see-also_7">See Also<a class="headerlink" href="#see-also_7" title="Permanent link">&para;</a></h3>
+<p>MQTT_GetMessage</p>
+<h2 id="mqtt_disconnect">MQTT_Disconnect<a class="headerlink" href="#mqtt_disconnect" title="Permanent link">&para;</a></h2>
+<h3 id="name_8">Name<a class="headerlink" href="#name_8" title="Permanent link">&para;</a></h3>
+<p>MQTT_Disconnect -- close the connection to the broker (V1)</p>
+<h3 id="synopsis_7">Synopsis<a class="headerlink" href="#synopsis_7" title="Permanent link">&para;</a></h3>
+<pre><code>MQTT_Disconnect(client)
+                 A0
+
+VOID MQTT_Disconnect(APTR);
+</code></pre>
+<h3 id="function_8">Function<a class="headerlink" href="#function_8" title="Permanent link">&para;</a></h3>
+<p>Sends an MQTT DISCONNECT and closes the underlying transport.
+Also cancels an in-progress mco_AutoReconnect reconnect attempt,
+if one is running, and forgets the client's remembered
+subscription list (so a later MQTT_Connect() starts clean - any
+subscriptions needed again must be re-issued with
+MQTT_Subscribe()).</p>
+<p>Unlike MQTT_Connect()/MQTT_Publish()/MQTT_Subscribe(), this
+function has no return value: there is nothing meaningful for the
+caller to do differently if the DISCONNECT packet itself could
+not be sent, since the transport is being torn down either way.</p>
+<h3 id="inputs_7">Inputs<a class="headerlink" href="#inputs_7" title="Permanent link">&para;</a></h3>
+<p>client - a handle from MQTT_CreateClient(). If not currently
+         connected, this call does nothing.</p>
+<h3 id="result_7">Result<a class="headerlink" href="#result_7" title="Permanent link">&para;</a></h3>
+<p>None.</p>
+<h3 id="notes_6">Notes<a class="headerlink" href="#notes_6" title="Permanent link">&para;</a></h3>
+<p>The client handle itself remains valid after this call - call
+MQTT_Connect() again to reconnect, or MQTT_DeleteClient() to
+destroy the handle entirely.</p>
+<h3 id="see-also_8">See Also<a class="headerlink" href="#see-also_8" title="Permanent link">&para;</a></h3>
+<p>MQTT_Connect, MQTT_DeleteClient</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../mqtt-library/" class="md-footer__link md-footer__link--prev" aria-label="Previous: mqtt.library">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                mqtt.library
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      midge — a native MQTT client for classic AmigaOS. BSD 2-Clause.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.footer", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
