@@ -9,8 +9,8 @@
  *
  * MIDGE_VERSION_DATE is the AmigaOS $VER date, <dd>.<mm>.<yyyy> per
  * https://wiki.amigaos.net/wiki/Version_Strings */
-#define MIDGE_VERSION      "0.1"
-#define MIDGE_VERSION_DATE "29.08.2026"
+#define MIDGE_VERSION      "0.2"
+#define MIDGE_VERSION_DATE "30.08.2026"
 
 /* Embedded AmigaOS version string, findable by the shell `Version` command.
  * The leading "\0" guards against an adjacent string in the binary running
