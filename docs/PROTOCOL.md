@@ -32,6 +32,23 @@ parsing paths; their encode-side correctness is instead covered by
 byte-exact vectors (`tests/vectors.h`, built by hand from the spec) in
 `tests/test_codec.c`.
 
+## Decode strictness
+
+`mqtt_decode()` is a tolerant receiver by default (accepts anything the
+spec doesn't explicitly forbid), with a small, deliberate set of
+exceptions where a violation is rejected outright as `-MQTT_ERR_MALFORMED`
+rather than surfaced to the caller:
+
+- **MQTT-4.7.3-1**: a PUBLISH topic name must not be empty.
+- **MQTT-3.3.1-2**: DUP must be 0 on a QoS 0 PUBLISH. A malformed/
+  misbehaving broker (or a MITM'd packet) setting it anyway is rejected
+  rather than passed through with a DUP flag the QoS 0 delivery path has
+  no defined meaning for.
+
+Other spec requirements not on this list are intentionally left
+unenforced for now (a tolerant-receiver posture, not an oversight) -
+see issue tracker for anything still under discussion.
+
 ## QoS scope
 
 - **QoS 0** is fully supported both directions.
@@ -78,6 +95,16 @@ timer - only `mqtt_client_connect()` and `mqtt_client_process()`'s own
 PINGREQ do. In practice this means a PINGREQ may go out slightly earlier
 than the theoretical minimum, never later, so it doesn't threaten the
 timeout guarantee above.
+
+All of the above assumes `now_ms` is monotonic. On the host it is
+(`CLOCK_MONOTONIC`); on the Amiga it is not (`DateStamp()` - see
+`src/tools/tool_clock.h`'s own comment and issue #8) - a clock change
+mid-session there can skew or spuriously trip any of these timeouts.
+Deliberately deferred: a real fix needs a genuinely monotonic source
+(`timer.device`), which would need per-connection state threaded through
+every caller of what is otherwise a stateless clock function, for a
+failure mode (something actively changing the clock mid-session) that's
+rare in practice.
 
 ## Session state
 
