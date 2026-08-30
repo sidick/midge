@@ -19,7 +19,8 @@ Publish a single message to a broker topic and exit.
 
 ```
 mqtt_pub HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,
-         PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S
+         PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S,TLS/S,TLSINSECURE/S,
+         CAFILE/K
 ```
 
 | Argument | Meaning |
@@ -52,7 +53,7 @@ with Ctrl-C.
 
 ```
 mqtt_sub HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,
-         KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S
+         KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S,TLS/S,TLSINSECURE/S,CAFILE/K
 ```
 
 | Argument | Meaning |
@@ -81,8 +82,8 @@ mqtt_sub HOST 192.168.1.10 TOPIC home/#
 The repo also builds host-native `mqtt_pub-host` / `mqtt_sub-host` (via
 `make cli`), used for development and by the CI broker smoke tests. They
 take getopt-style flags mirroring the Amiga arguments above (`-h HOST`,
-`-p PORT`, `-t TOPIC`, and so on), plus two flags that only exist on the
-host builds so far:
+`-p PORT`, `-t TOPIC`, and so on), including the TLS switches - as short
+flags rather than the Amiga tools' `TLS`/`TLSINSECURE`/`CAFILE` keywords:
 
 | Flag | Meaning |
 |---|---|

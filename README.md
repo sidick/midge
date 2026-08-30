@@ -8,14 +8,16 @@ own telemetry. It ships as command-line tools, a shared library
 (`mqtt.library`) any other AmigaOS program can call, and — eventually — a
 ReAction dashboard application.
 
-> **Status:** the protocol core, `mqtt_pub`/`mqtt_sub` CLI tools, and
+> **Status:** the protocol core, `mqtt_pub`/`mqtt_sub` CLI tools,
 > `mqtt.library` (subprocess-per-connection, QoS 0/1, MsgPort dispatch,
-> opt-in auto-reconnect with backoff) are implemented, cross-build to real
-> AmigaOS binaries, and are verified end-to-end against a real Mosquitto
-> broker on real 68020 codegen via Copperline in CI. Not yet tagged for
-> release. TLS via AmiSSL and a ReAction dashboard with Home Assistant MQTT
-> discovery are next — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-> for the full roadmap.
+> opt-in auto-reconnect with backoff), and TLS via AmiSSL (`mco_TLS`,
+> optional private-CA trust) are implemented, cross-build to real AmigaOS
+> binaries, and are verified end-to-end against a real Mosquitto broker on
+> real 68020 codegen via Copperline in CI. Not yet tagged for release. A
+> ReAction dashboard with Home Assistant MQTT discovery is next — see the
+> [issue tracker](https://github.com/sidick/midge/issues) for what's
+> planned (`docs/ARCHITECTURE.md`'s own roadmap section was retired once
+> it matched shipped history).
 
 ## AI-assisted development
 
@@ -55,6 +57,11 @@ implementation of its own.
   `mco_AutoReconnect` mode reconnects with exponential backoff and
   auto-resubscribes after an unexpected drop. Two example programs and a
   hand-written autodoc ship in the release archive's `developer/` tree.
+- **TLS via AmiSSL** — opt-in (`TLS`/`TLSINSECURE`/`CAFILE` on the Amiga
+  tools, `-s`/`-S`/`-c` on the host builds), certificate and hostname
+  verification on by default, with an optional private-CA trust anchor for
+  self-hosted brokers. The statically linked tools have no AmiSSL
+  dependency and don't support it.
 - **Portable, testable core** — the packet codec and connection state
   machine are plain C99 with zero OS dependencies, so protocol-level tests
   run on the host with no emulator.
@@ -68,8 +75,9 @@ implementation of its own.
   dependencies beyond C99 itself (no sockets, no timers, no allocation —
   caller buffers only). All platform code lives in `src/host/`/`src/amiga/`;
   the transport vtable (`src/core/mqtt_transport.h`) is the only seam
-  between them, so TLS (Phase 3) drops in as another transport
-  implementation with no change to the client state machine.
+  between them - TLS (`src/host/transport_openssl.c`,
+  `src/amiga/transport_amissl.c`) is exactly this: another transport
+  implementation, no change to the client state machine.
 - **Real on-target verification, not just host tests** — every networking
   claim is proven against a real broker on real 68020 codegen (Copperline's
   HostSocket board), not just mocked. `volamos` gives a much faster local

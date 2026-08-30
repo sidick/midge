@@ -483,7 +483,29 @@ $(BUILD)/tools/lha:
 # MIDGE_VERSION; the release workflow's tag-vs-source check
 # (scripts/verify-version.sh) separately confirms the tag matches
 # src/version.h, closing the loop: tag == src/version.h == the binaries.
-dist: build guide $(LHA)
+#
+# Unlike `build`/`library`/`test-host` (which feature-detect AmiSSL and
+# degrade gracefully - the shared CI image has no SDK, see M68K_HAS_AMISSL
+# above), a release MUST ship a TLS-capable mqtt.library: the readme/docs
+# advertise TLS unconditionally. So `dist` fetches the SDK itself if
+# missing and re-invokes `build` as a sub-make ($(MAKE), not a plain
+# prerequisite) - M68K_HAS_AMISSL is a `:=` immediate-expansion variable,
+# fixed when the OUTER make parses this file, before any recipe (including
+# the fetch below) has run; only a fresh sub-make process re-parses the
+# Makefile and sees the now-populated .cache/amissl-sdk/. The `rm -f`
+# before it is required too - `make` has no idea M68K_HAS_AMISSL changed,
+# only that mqtt.library's sources didn't, and would otherwise report
+# "Nothing to be done" and reuse the stale non-TLS build. The grep after
+# is a mechanical, permanent guard against this whole class of regression
+# (a silently-degraded release), not just a one-time fix.
+dist: guide $(LHA)
+	@if [ ! -f "$(AMISSL_SDK_DIR)/include/openssl/ssl.h" ]; then \
+		echo "dist: fetching AmiSSL SDK (a release must ship TLS support)"; \
+		$(MAKE) fetch-amissl-sdk; \
+	fi
+	rm -f $(BUILD)/mqtt.library
+	$(MAKE) build
+	@grep -aq "amisslmaster.library" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library has no AmiSSL/TLS support - refusing to release (see M68K_HAS_AMISSL / make fetch-amissl-sdk)"; exit 1; }
 	@v=$$(sed -n 's/^#define MIDGE_VERSION[[:space:]]*"\(.*\)"$$/\1/p' src/version.h); \
 	for b in mqtt_pub mqtt_sub mqtt_pub-static mqtt_sub-static; do \
 		grep -aqF "\$$VER: $$b $$v (" $(BUILD)/$$b || { echo "dist: $(BUILD)/$$b lacks \"\$$VER: $$b $$v (...)\" - stale build/?"; exit 1; }; \

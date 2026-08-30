@@ -67,11 +67,32 @@
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
 
+#include "tool_clock.h"
+
 /* WaitSelect() poll interval per gated retry - matches
  * transport_bsdsocket.c's MQTT_BSDSOCKET_POLL_SECS and
  * tests/copperline/amissl-spike/amisslspike.c's SPIKE_POLL_SECS, so all
  * three Amiga-side network waits share one wakeup cadence. */
 #define MQTT_AMISSL_POLL_SECS 1
+
+/* Overall handshake budget. Without this, a peer that accepts the TCP
+ * connect but never completes (or never finishes) the TLS handshake -
+ * a tarpit, a firewall black hole, the wrong service on the port, a wedged
+ * broker - makes the loop below spin in wait_gate() forever: unlike
+ * amissl_send()/recv() (bounded by core's own keepalive/PUBACK/SUBACK
+ * timeouts once a connection exists), this loop runs entirely inside
+ * transport_amissl_connect(), before mqtt_client_connect() is even
+ * called, so nothing above it can time it out. Worse inside mqtt.library:
+ * the connection child subprocess isn't reachable by the caller's
+ * MQTT_Disconnect()/MQTT_DeleteClient() (cmd_port) until this call
+ * returns, and wait_gate() deliberately treats a break_sigmask wake as a
+ * retry-me timeout, not an abort (see its own comment) - so this was a
+ * real "only a reboot recovers" hang, not just a slow retry. 30s is
+ * generous next to every real handshake observed in testing (even on a
+ * stock 68020, see userdocs/CLI-Reference.md's CPU-speed note) while
+ * still bounding the worst case to something a caller/reconnect loop can
+ * recover from. */
+#define MQTT_AMISSL_HANDSHAKE_TIMEOUT_MS 30000u
 
 /* Single bounded wait for readability/writability, mirroring
  * amisslspike.c's wait_gate() exactly (same fd_set/timeval/sigmask shape as
@@ -312,26 +333,26 @@ int transport_amissl_connect(mqtt_transport *out, amissl_ctx *ctx,
     SSL_set_connect_state(ctx->ssl);
 
     /* --- 4. handshake, WaitSelect-gated (see amisslspike.c) -------------- */
-    for (;;) {
-        int rc;
-        ERR_clear_error();
-        rc = SSL_do_handshake(ctx->ssl);
-        if (rc == 1)
-            break;
+    {
+        uint32_t handshake_start = tool_now_ms();
 
-        {
-            int err = SSL_get_error(ctx->ssl, rc);
-            if (err == SSL_ERROR_WANT_READ) {
-                if (wait_gate(ctx, 0) < 0)
+        for (;;) {
+            int rc;
+            ERR_clear_error();
+            rc = SSL_do_handshake(ctx->ssl);
+            if (rc == 1)
+                break;
+
+            {
+                int err = SSL_get_error(ctx->ssl, rc);
+                if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+                    goto fail_ssl; /* handshake failed outright */
+                if (tool_now_ms() - handshake_start >
+                        MQTT_AMISSL_HANDSHAKE_TIMEOUT_MS)
+                    goto fail_ssl; /* MQTT_AMISSL_HANDSHAKE_TIMEOUT_MS - see its comment */
+                if (wait_gate(ctx, err == SSL_ERROR_WANT_WRITE) < 0)
                     goto fail_ssl;
-                continue;
             }
-            if (err == SSL_ERROR_WANT_WRITE) {
-                if (wait_gate(ctx, 1) < 0)
-                    goto fail_ssl;
-                continue;
-            }
-            goto fail_ssl; /* handshake failed outright */
         }
     }
 
