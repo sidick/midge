@@ -15,6 +15,8 @@
 #   make library-net-smoke  on-target mqtt.library end-to-end API test (real broker)
 #   make volamos-library-net-smoke  same check via volamos - faster local loop, not a CI substitute
 #   make library-reconnect-smoke  on-target mco_AutoReconnect test (broker restart mid-run)
+#   make fetch-amissl-sdk  fetch the AmiSSL v5 SDK (needed for Amiga-side TLS support)
+#   make library-tls-smoke  on-target mco_TLS test - local-only, needs an amibake image
 #   make clean
 #
 # The core is portable C99, so `test` and `cli` build with any host compiler.
@@ -385,6 +387,25 @@ libreconn-m68k: library-headers | $(BUILD)/.dir
 # library-net-smoke.
 library-reconnect-smoke: library libreconn-m68k cli
 	sh tests/library/reconn-run.sh
+
+# --- m68k: on-target mco_TLS end-to-end smoke test (issue #3 Phase 3) ---
+# Same shape as libnet-m68k (a normal CLI program against the generated
+# caller-side headers only - no AmiSSL headers needed by the caller) - see
+# tests/library/libtls.c.
+libtls-m68k: library-headers | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) tests/library/libtls.c -o $(BUILD)/libtls
+
+# Local-only, NOT a CI/release gate (unlike library-net-smoke): needs a
+# real AmigaOS 3.2.2 + AmiSSL boot image built by amibake
+# (github.com/sidick/amibake), since AmiSSL needs real Devs:/Libs: install
+# layout that the plain bundled-AROS/HostSocket boot the other
+# library-*-smoke targets use doesn't have - see
+# tests/library/README.md's "TLS smoke test" section for setup. Also
+# needs `library` built with AmiSSL support (`make fetch-amissl-sdk`
+# first - see M68K_HAS_AMISSL above), and $MIDGE_TLS_AMIGA_IMAGE pointing
+# at the amibake output directory.
+library-tls-smoke: library libtls-m68k cli
+	sh tests/library/tls-run.sh
 
 # --- m68k: on-target check that examples/pubexample.c actually works ---
 # Real Copperline boot (CI/release gate): stages build/pubexample and
