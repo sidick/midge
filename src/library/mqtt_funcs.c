@@ -285,7 +285,8 @@ static int child_connect(MqttClientHandle *h, struct MsgPort *cmd_port,
 #ifdef MIDGE_AMIGA_TLS
         if (transport_amissl_connect(transport, &cctx->tls,
                 (const char *)h->ch_Host, h->ch_Port,
-                h->ch_Opts.mco_TLSInsecure) != 0)
+                h->ch_Opts.mco_TLSInsecure,
+                (const char *)h->ch_Opts.mco_CAFile) != 0)
             return MQTTERR_NOTCONNECTED;
         /* Extra wakeup source for recv()'s WaitSelect poll, so a
          * PUBLISH/SUBSCRIBE/DISCONNECT/QUIT arriving on cmd_port while
@@ -927,6 +928,11 @@ APTR MQTT_CreateClient(struct Library *_base, STRPTR host, UWORD port,
             if (!h->ch_Password)
                 goto fail_host;
         }
+        if (opts->mco_CAFile) {
+            h->ch_CAFile = dupstr((const char *)opts->mco_CAFile);
+            if (!h->ch_CAFile)
+                goto fail_host;
+        }
         h->ch_Opts.mco_KeepAlive = opts->mco_KeepAlive;
         h->ch_Opts.mco_CleanSession = opts->mco_CleanSession;
         h->ch_Opts.mco_AutoReconnect = opts->mco_AutoReconnect;
@@ -936,6 +942,7 @@ APTR MQTT_CreateClient(struct Library *_base, STRPTR host, UWORD port,
     h->ch_Opts.mco_ClientID = h->ch_ClientID;
     h->ch_Opts.mco_Username = h->ch_Username;
     h->ch_Opts.mco_Password = h->ch_Password;
+    h->ch_Opts.mco_CAFile = h->ch_CAFile;
 
     h->ch_MsgPort = CreateMsgPort();
     if (!h->ch_MsgPort)
@@ -984,6 +991,8 @@ fail_startup_reply:
 fail_msgport:
     DeleteMsgPort(h->ch_MsgPort);
 fail_host:
+    if (h->ch_CAFile)
+        FreeVec(h->ch_CAFile);
     if (h->ch_Password)
         FreeVec(h->ch_Password);
     if (h->ch_Username)
@@ -1033,6 +1042,8 @@ VOID MQTT_DeleteClient(struct Library *_base, APTR client)
         FreeVec(msg);
     DeleteMsgPort(h->ch_MsgPort);
 
+    if (h->ch_CAFile)
+        FreeVec(h->ch_CAFile);
     if (h->ch_Password)
         FreeVec(h->ch_Password);
     if (h->ch_Username)

@@ -8,20 +8,21 @@
 
 #define PUB_TEMPLATE                                                       \
     "HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,"  \
-    "PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S,TLS/S,TLSINSECURE/S"
+    "PASSWORD/K,KEEPALIVE/N/K,RETAIN/S,VERBOSE/S,TLS/S,TLSINSECURE/S,"     \
+    "CAFILE/K"
 #define SUB_TEMPLATE                                                       \
     "HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,"        \
-    "KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S,TLS/S,TLSINSECURE/S"
+    "KEEPALIVE/N/K,COUNT/N/K,VERBOSE/S,TLS/S,TLSINSECURE/S,CAFILE/K"
 
 enum {
     PUB_HOST, PUB_PORT, PUB_TOPIC, PUB_MESSAGE, PUB_FILE, PUB_QOS,
     PUB_CLIENTID, PUB_USER, PUB_PASSWORD, PUB_KEEPALIVE, PUB_RETAIN,
-    PUB_VERBOSE, PUB_TLS, PUB_TLSINSECURE, PUB_NARGS
+    PUB_VERBOSE, PUB_TLS, PUB_TLSINSECURE, PUB_CAFILE, PUB_NARGS
 };
 enum {
     SUB_HOST, SUB_PORT, SUB_TOPIC, SUB_QOS, SUB_CLIENTID, SUB_USER,
     SUB_PASSWORD, SUB_KEEPALIVE, SUB_COUNT, SUB_VERBOSE, SUB_TLS,
-    SUB_TLSINSECURE, SUB_NARGS
+    SUB_TLSINSECURE, SUB_CAFILE, SUB_NARGS
 };
 
 static struct RDArgs *g_rdargs;
@@ -67,6 +68,7 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
         opts->tls_insecure = args[PUB_TLSINSECURE] ? 1 : 0;
         if (opts->tls_insecure)
             opts->tls = 1;
+        opts->ca_file = (const char *)args[PUB_CAFILE];
 
         if (!opts->message && !opts->file) {
             fprintf(stderr, "mqtt_pub: MESSAGE or FILE is required\n");
@@ -98,6 +100,7 @@ int amiga_parse_args(int is_pub, tool_opts *opts)
         opts->tls_insecure = args[SUB_TLSINSECURE] ? 1 : 0;
         if (opts->tls_insecure)
             opts->tls = 1;
+        opts->ca_file = (const char *)args[SUB_CAFILE];
     }
 
     if (opts->port == 0)

@@ -58,6 +58,14 @@ struct MqttConnectOpts {
                                   unless mco_TLS is also TRUE. For testing
                                   against self-signed or otherwise untrusted
                                   brokers only - never for production use. */
+    STRPTR mco_CAFile;        /* NUL-terminated path to a PEM file, loaded
+                                  as an extra trust anchor alongside
+                                  AmiSSL's bundled trust store - for a
+                                  broker behind a private CA that isn't in
+                                  it (issue #13). Ignored unless mco_TLS is
+                                  TRUE, and ignored if mco_TLSInsecure is
+                                  also TRUE (nothing to verify against
+                                  then). NULL = no extra trust anchor. */
     BOOL   mco_AutoReconnect; /* FALSE (default/zeroed struct) = today's
                                   behaviour: an unexpected connection drop
                                   (transport error, keepalive timeout) leaves

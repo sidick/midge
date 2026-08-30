@@ -30,6 +30,11 @@ typedef struct {
     int tls;                /* opt-in, never default-on (see issue #3) */
     int tls_insecure;       /* skip certificate verification; ignored
                                 without tls */
+    const char *ca_file;    /* extra trust anchor for a private CA (issue
+                                #13); NULL uses only the system/AmiSSL
+                                default trust store. Ignored without tls,
+                                and ignored if tls_insecure is also set
+                                (nothing to verify against then). */
 } tool_opts;
 
 /* Connects (assumes `transport` is already connected to the broker),

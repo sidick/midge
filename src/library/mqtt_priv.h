@@ -93,6 +93,7 @@ typedef struct MqttClientHandle {
     STRPTR ch_ClientID;
     STRPTR ch_Username;
     STRPTR ch_Password;
+    STRPTR ch_CAFile;
 
     /* --- QoS 1 publish / SUBACK-wait scratch state -------------------------
      * Written by deliver_cb() (called from inside the CHILD subprocess's own

@@ -201,7 +201,8 @@ static void amissl_close(void *vctx)
 
 int transport_amissl_connect(mqtt_transport *out, amissl_ctx *ctx,
                               const char *host, uint16_t port,
-                              int insecure_skip_verify)
+                              int insecure_skip_verify,
+                              const char *ca_file)
 {
     struct Library *SocketBase;
     struct Library *AmiSSLMasterBase;
@@ -289,6 +290,12 @@ int transport_amissl_connect(mqtt_transport *out, amissl_ctx *ctx,
                             SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                             NULL);
         if (!SSL_CTX_set_default_verify_paths(ctx->ssl_ctx))
+            goto fail_ctx;
+        /* Extra trust anchor for a private CA (issue #13) - added on top
+         * of the AmiSSL: cert store above, not instead of it, so a broker
+         * behind a normal public CA still verifies too. */
+        if (ca_file != NULL &&
+            !SSL_CTX_load_verify_locations(ctx->ssl_ctx, ca_file, NULL))
             goto fail_ctx;
     }
 

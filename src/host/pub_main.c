@@ -31,7 +31,8 @@ int main(int argc, char **argv)
     if (opts.tls) {
         connected = transport_openssl_connect(&transport, &ossl_ctx,
                                                opts.host, opts.port,
-                                               opts.tls_insecure) == 0;
+                                               opts.tls_insecure,
+                                               opts.ca_file) == 0;
     } else {
         connected = transport_bsd_connect(&transport, &ctx, opts.host,
                                            opts.port) == 0;

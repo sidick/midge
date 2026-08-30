@@ -14,8 +14,8 @@
 int host_parse_args(int argc, char **argv, int is_pub, tool_opts *opts)
 {
     int ch;
-    const char *optstring = is_pub ? "h:p:t:m:f:q:i:u:P:k:rvsS"
-                                    : "h:p:t:q:i:u:P:k:C:vsS";
+    const char *optstring = is_pub ? "h:p:t:m:f:q:i:u:P:k:rvsSc:"
+                                    : "h:p:t:q:i:u:P:k:C:vsSc:";
 
     memset(opts, 0, sizeof(*opts));
     /* opts->port stays 0 (memset) until resolved after the option loop,
@@ -40,15 +40,17 @@ int host_parse_args(int argc, char **argv, int is_pub, tool_opts *opts)
         case 'v': opts->verbose = 1; break;
         case 's': opts->tls = 1; break;
         case 'S': opts->tls = 1; opts->tls_insecure = 1; break;
+        case 'c': opts->ca_file = optarg; break;
         default:
             fprintf(stderr,
                     is_pub ? "usage: %s -h host [-p port] -t topic "
                              "(-m message | -f file) [-q qos] [-i id] "
                              "[-u user] [-P pass] [-k keepalive] [-r] [-s] "
-                             "[-S] [-v]\n"
+                             "[-S] [-c cafile] [-v]\n"
                            : "usage: %s -h host [-p port] -t topic "
                              "[-q qos] [-i id] [-u user] [-P pass] "
-                             "[-k keepalive] [-C count] [-s] [-S] [-v]\n",
+                             "[-k keepalive] [-C count] [-s] [-S] "
+                             "[-c cafile] [-v]\n",
                     argv[0]);
             return -1;
         }

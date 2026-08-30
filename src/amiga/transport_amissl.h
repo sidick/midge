@@ -45,7 +45,11 @@ typedef struct {
  * mask, same discipline as transport_bsdsocket_connect). Certificate and
  * hostname verification are on by default; pass insecure_skip_verify
  * nonzero to disable both (SSL_VERIFY_NONE) - for testing against
- * self-signed brokers only, never for production use.
+ * self-signed brokers only, never for production use. `ca_file`, if
+ * non-NULL, additionally loads a PEM file as an extra trust anchor
+ * (SSL_CTX_load_verify_locations()) - for a private CA not in AmiSSL's
+ * bundled trust store (issue #13); ignored when insecure_skip_verify is
+ * set (nothing to verify against then).
  *
  * Requires an AmiSSL: assign (see amissl.library's install docs - the
  * amissl package assigns it to SYS:Devs/AmiSSL) for InitAmiSSL()'s cert
@@ -57,6 +61,7 @@ typedef struct {
  * handshake failure) - no resources leaked on any error path. */
 int transport_amissl_connect(mqtt_transport *out, amissl_ctx *ctx_storage,
                               const char *host, uint16_t port,
-                              int insecure_skip_verify);
+                              int insecure_skip_verify,
+                              const char *ca_file);
 
 #endif

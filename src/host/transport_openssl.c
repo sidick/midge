@@ -118,7 +118,8 @@ static int tcp_connect(const char *host, uint16_t port)
 
 int transport_openssl_connect(mqtt_transport *out, openssl_ctx *ctx,
                                const char *host, uint16_t port,
-                               int insecure_skip_verify)
+                               int insecure_skip_verify,
+                               const char *ca_file)
 {
     int fd;
     SSL_CTX *ssl_ctx;
@@ -147,6 +148,16 @@ int transport_openssl_connect(mqtt_transport *out, openssl_ctx *ctx,
                             NULL);
         if (!SSL_CTX_set_default_verify_paths(ssl_ctx)) {
             fprintf(stderr, "mqtt: failed to load system trust store\n");
+            SSL_CTX_free(ssl_ctx);
+            close(fd);
+            return -1;
+        }
+        /* Extra trust anchor for a private CA (issue #13) - added on top
+         * of the system trust store above, not instead of it, so a broker
+         * behind a normal public CA still verifies too. */
+        if (ca_file != NULL &&
+            !SSL_CTX_load_verify_locations(ssl_ctx, ca_file, NULL)) {
+            fprintf(stderr, "mqtt: failed to load CA file %s\n", ca_file);
             SSL_CTX_free(ssl_ctx);
             close(fd);
             return -1;
