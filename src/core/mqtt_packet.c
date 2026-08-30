@@ -335,6 +335,8 @@ int mqtt_decode(const uint8_t *buf, size_t avail, mqtt_packet *out)
             return -MQTT_ERR_MALFORMED;
         if (qos > 1)
             return -MQTT_ERR_PROTOCOL; /* QoS 2 out of scope */
+        if (qos == 0 && (flags & 0x08)) /* MQTT-3.3.1-2: DUP must be 0 for QoS 0 */
+            return -MQTT_ERR_MALFORMED;
         if (remlen < 2)
             return -MQTT_ERR_MALFORMED;
         tlen = (uint16_t)((content[0] << 8) | content[1]);

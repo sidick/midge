@@ -303,6 +303,17 @@ static void test_decode_publish_rejects_empty_topic(void)
     TEST_CHECK(mqtt_decode(bad, sizeof(bad) - 1, &pkt) == -MQTT_ERR_MALFORMED);
 }
 
+/* MQTT-3.3.1-2: DUP must be 0 for a QoS 0 PUBLISH (issue #10). */
+static void test_decode_publish_rejects_dup_with_qos0(void)
+{
+    mqtt_packet pkt;
+    uint8_t bad[sizeof(V_PUBLISH_QOS0)];
+
+    memcpy(bad, V_PUBLISH_QOS0, sizeof(bad));
+    bad[0] |= 0x08; /* set DUP; QoS bits (2-1) stay 0 */
+    TEST_CHECK(mqtt_decode(bad, sizeof(bad), &pkt) == -MQTT_ERR_MALFORMED);
+}
+
 static void test_truncation_sweeps(void)
 {
     check_truncation_sweep(V_CONNACK_OK, sizeof(V_CONNACK_OK));
@@ -325,5 +336,6 @@ void run_codec_tests(void)
     test_decode_rejects_client_to_broker_types();
     test_decode_malformed_flags();
     test_decode_publish_rejects_empty_topic();
+    test_decode_publish_rejects_dup_with_qos0();
     test_truncation_sweeps();
 }

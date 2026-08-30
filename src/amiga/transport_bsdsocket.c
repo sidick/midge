@@ -12,13 +12,24 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h> /* FIONBIO */
+#include <errno.h> /* EINPROGRESS, via bsdsocket.library's Errno() below */
 
 #include <string.h>
+
+#include "tool_clock.h"
 
 /* WaitSelect() poll interval: short enough that mqtt_client_process()'s
  * caller gets a timely wakeup to check keepalive scheduling, matching the
  * host transport's SO_RCVTIMEO of 1s. */
 #define MQTT_BSDSOCKET_POLL_SECS 1
+
+/* Overall connect-phase budget (issue #7) - same value and rationale as
+ * transport_amissl.c's/transport_openssl.c's handshake timeouts: bounds a
+ * host that accepts nothing (down, firewalled, wrong port) instead of
+ * relying on the TCP stack's own connect timeout (often 75s+) with no way
+ * to abort it in between. */
+#define MQTT_BSDSOCKET_CONNECT_TIMEOUT_MS 30000u
 
 /* proto/bsdsocket.h's macro-based inline stubs (inline/bsdsocket.h) call
  * through whatever C identifier named `SocketBase` is in scope at the call
@@ -114,6 +125,7 @@ int transport_bsdsocket_connect(mqtt_transport *out, bsdsocket_ctx *ctx,
     struct sockaddr_in addr;
     unsigned long ip;
     int fd;
+    long one = 1, zero = 0;
 
     ctx->fd = -1;
     ctx->ctrl_c = 0;
@@ -129,31 +141,82 @@ int transport_bsdsocket_connect(mqtt_transport *out, bsdsocket_ctx *ctx,
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
 
+    /* gethostbyname() itself has no WaitSelect()/CTRL_C abortability of
+     * its own on this API - a DNS query against an unresponsive resolver
+     * blocks for whatever the stack's own resolver timeout is (issue #7's
+     * remaining gap; fixing it would need an async-resolve API this
+     * classic BSD sockets surface doesn't offer). The connect() below is
+     * the part that's actually fixed here. */
     ip = inet_addr((STRPTR)host);
     if (ip != (unsigned long)-1) {
         addr.sin_addr.s_addr = ip;
     } else {
         struct hostent *he = gethostbyname((STRPTR)host);
-        if (!he || !he->h_addr_list[0]) {
-            CloseLibrary(SocketBase);
-            ctx->socket_base = NULL;
-            return -1;
-        }
+        if (!he || !he->h_addr_list[0])
+            goto fail_socket_base;
         memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
     }
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        CloseLibrary(SocketBase);
-        ctx->socket_base = NULL;
-        return -1;
-    }
+    if (fd < 0)
+        goto fail_socket_base;
+
+    /* Non-blocking for the connect attempt only (issue #7) - a host that
+     * never responds (down, firewalled, wrong port) would otherwise block
+     * here for the TCP stack's own connect timeout (often 75s+) with no
+     * way to abort: unlike bsdsocket_recv()'s WaitSelect()-gated poll,
+     * connect() on a blocking socket has no signal mask of its own to
+     * pass SIGBREAKF_CTRL_C through. Reset to blocking again below once
+     * connected - bsdsocket_send() still assumes that mode (a plain
+     * blocking send(), no WaitSelect gating of its own). */
+    if (IoctlSocket(fd, FIONBIO, (char *)&one) < 0)
+        goto fail_fd;
+
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        CloseSocket(fd);
-        CloseLibrary(SocketBase);
-        ctx->socket_base = NULL;
-        return -1;
+        uint32_t connect_start;
+
+        if (Errno() != EINPROGRESS)
+            goto fail_fd;
+
+        connect_start = tool_now_ms();
+        for (;;) {
+            struct timeval tv;
+            fd_set wfds;
+            ULONG sigmask = SIGBREAKF_CTRL_C;
+            long n;
+
+            FD_ZERO(&wfds);
+            FD_SET(fd, &wfds);
+            tv.tv_sec = MQTT_BSDSOCKET_POLL_SECS;
+            tv.tv_usec = 0;
+
+            n = WaitSelect(fd + 1, NULL, &wfds, NULL, &tv, &sigmask);
+            if (n > 0)
+                break; /* fd is writable - the attempt finished, either way */
+            if (n < 0) {
+                if (sigmask & SIGBREAKF_CTRL_C)
+                    ctx->ctrl_c = 1;
+                goto fail_fd;
+            }
+            if (tool_now_ms() - connect_start > MQTT_BSDSOCKET_CONNECT_TIMEOUT_MS)
+                goto fail_fd;
+        }
+
+        /* This bsdsocket.library NDK has no SO_ERROR/SOL_SOCKET to ask
+         * "did that connect actually succeed?" - getpeername() is the
+         * portable substitute: it only succeeds on an established
+         * connection, failing (typically ENOTCONN) if the peer refused or
+         * the attempt otherwise failed. */
+        {
+            struct sockaddr_in peer;
+            socklen_t peerlen = sizeof(peer);
+            if (getpeername(fd, (struct sockaddr *)&peer, &peerlen) < 0)
+                goto fail_fd;
+        }
     }
+
+    if (IoctlSocket(fd, FIONBIO, (char *)&zero) < 0)
+        goto fail_fd;
 
     ctx->fd = fd;
     out->ctx = ctx;
@@ -161,4 +224,11 @@ int transport_bsdsocket_connect(mqtt_transport *out, bsdsocket_ctx *ctx,
     out->recv = bsdsocket_recv;
     out->close = bsdsocket_close;
     return 0;
+
+fail_fd:
+    CloseSocket(fd);
+fail_socket_base:
+    CloseLibrary(SocketBase);
+    ctx->socket_base = NULL;
+    return -1;
 }
