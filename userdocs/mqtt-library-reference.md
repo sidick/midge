@@ -195,8 +195,8 @@ port  - broker TCP port (1883 is the conventional unencrypted MQTT
         port).
 opts  - connect options (client id, credentials, keepalive,
         clean-session, mco_AutoReconnect, mco_TLS,
-        mco_TLSInsecure); see struct MqttConnectOpts in
-        <libraries/mqtt.h>. May be NULL, which behaves like a
+        mco_TLSInsecure, mco_CAFile); see struct MqttConnectOpts
+        in <libraries/mqtt.h>. May be NULL, which behaves like a
         zeroed struct (no client id, no credentials, no
         keepalive, clean session, no auto-reconnect, no TLS).
 
@@ -224,6 +224,17 @@ speed"). mco_TLSInsecure skips certificate/hostname verification
 and is ignored unless mco_TLS is also set - for testing against
 self-signed or otherwise untrusted brokers only, never for
 production use.
+
+mco_CAFile (issue #13) additionally trusts a PEM file's CA
+alongside AmiSSL's bundled trust store - for a broker behind a
+private CA that isn't in it. Certificate verification checks the
+broker cert's validity dates against the Amiga's own system
+clock, same as any TLS client - a system clock that's wrong
+(common on real hardware with a dead or unset battery-backed
+RTC) will make a perfectly good certificate look not-yet-valid
+or expired and fail the handshake. Set the clock (SetClock,
+IControl, or NTP via a suitable client) before relying on
+certificate verification.
 
 ### See Also
 

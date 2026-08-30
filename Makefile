@@ -17,6 +17,7 @@
 #   make library-reconnect-smoke  on-target mco_AutoReconnect test (broker restart mid-run)
 #   make fetch-amissl-sdk  fetch the AmiSSL v5 SDK (needed for Amiga-side TLS support)
 #   make library-tls-smoke  on-target mco_TLS test - local-only, needs an amibake image
+#   make library-cafile-smoke  on-target mco_CAFile test - local-only, needs an amibake image
 #   make clean
 #
 # The core is portable C99, so `test` and `cli` build with any host compiler.
@@ -406,6 +407,16 @@ libtls-m68k: library-headers | $(BUILD)/.dir
 # at the amibake output directory.
 library-tls-smoke: library libtls-m68k cli
 	sh tests/library/tls-run.sh
+
+# --- m68k: on-target mco_CAFile end-to-end smoke test (issue #13) ---
+# Same shape/local-only rationale as libtls-m68k/library-tls-smoke - see
+# tests/library/libcafile.c and cafile-run.sh's own banners (the latter
+# also explains why this one seeds Copperline's RTC).
+libcafile-m68k: library-headers | $(BUILD)/.dir
+	$(M68K_CC) $(M68K_CFLAGS) -I$(LIB_INCDIR) tests/library/libcafile.c -o $(BUILD)/libcafile
+
+library-cafile-smoke: library libcafile-m68k
+	sh tests/library/cafile-run.sh
 
 # --- m68k: on-target check that examples/pubexample.c actually works ---
 # Real Copperline boot (CI/release gate): stages build/pubexample and

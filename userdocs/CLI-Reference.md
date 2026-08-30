@@ -37,6 +37,7 @@ mqtt_pub HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,
 | `VERBOSE` | Print connection and protocol detail to stdout. |
 | `TLS` | Connect over TLS via AmiSSL, with certificate and hostname verification on. Default build only - see [TLS on the Amiga](#tls-on-the-amiga). When no `PORT` is given, the default becomes 8883 instead of 1883. |
 | `TLSINSECURE` | Connect over TLS but skip certificate verification (implies `TLS`). For testing against self-signed or otherwise untrusted brokers only. |
+| `CAFILE` | Trust an additional CA certificate (PEM file), alongside AmiSSL's bundled trust store - for a broker behind a private CA. Ignored without `TLS`, and ignored if `TLSINSECURE` is also given. |
 
 Example:
 
@@ -67,6 +68,7 @@ mqtt_sub HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,
 | `VERBOSE` | Print connection and protocol detail to stdout. |
 | `TLS` | Connect over TLS via AmiSSL, with certificate and hostname verification on. Default build only - see [TLS on the Amiga](#tls-on-the-amiga). When no `PORT` is given, the default becomes 8883 instead of 1883. |
 | `TLSINSECURE` | Connect over TLS but skip certificate verification (implies `TLS`). For testing against self-signed or otherwise untrusted brokers only. |
+| `CAFILE` | Trust an additional CA certificate (PEM file), alongside AmiSSL's bundled trust store - for a broker behind a private CA. Ignored without `TLS`, and ignored if `TLSINSECURE` is also given. |
 
 Example:
 
@@ -86,6 +88,7 @@ host builds so far:
 |---|---|
 | `-s` | Enable TLS, with certificate and hostname verification on, checked against the system trust store. When no `-p` is given, the default port becomes 8883 instead of 1883. |
 | `-S` | Enable TLS but skip certificate verification. Intended only for testing against self-signed or otherwise untrusted brokers. |
+| `-c FILE` | Trust an additional CA certificate (PEM file), alongside the system trust store - for a broker behind a private CA. Ignored without `-s`/`-S`, and ignored together with `-S` (nothing to verify against then). |
 
 TLS is opt-in and off by default everywhere in midge.
 
@@ -108,6 +111,22 @@ The statically linked `mqtt_pub-static`/`mqtt_sub-static` have no AmiSSL
 support and reject `TLS` outright rather than silently connecting in
 plaintext.
 
+`CAFILE`/`-c` trust an additional certificate authority (a PEM file)
+alongside the bundled trust store, for a broker behind a private CA -
+without it, `TLS` (not `TLSINSECURE`) fails against a broker whose
+certificate isn't signed by a CA already in that store.
+
+### A note on TLS and the system clock
+
+Certificate verification (`TLS` without `TLSINSECURE`) checks the
+broker's certificate validity dates against the Amiga's own system
+clock. A wrong clock - common on real hardware with a dead or unset
+battery-backed RTC, and easy to overlook under an emulator too - makes a
+perfectly good certificate look not-yet-valid or expired, and the
+handshake fails with no indication the actual problem is the clock, not
+the certificate. Set the clock (`SetClock`, `IControl`, or an NTP client)
+before relying on certificate verification.
+
 ### A note on TLS and CPU speed
 
 Software TLS is CPU-intensive, and de-risking work for the Amiga-side
@@ -119,6 +138,5 @@ bump - any real accelerator, or a 68030 or better - clears this
 reliably. This isn't specific to midge: [AmiSSL's own maintainer has
 reached the same conclusion](https://github.com/jens-maus/amissl/issues/111)
 for other software - "the Amiga can't keep up with modern SSL" at stock
-clock speeds. Once TLS ships on the Amiga side, expect it to work best on
-an accelerated machine, and to occasionally need a retry on genuinely
-stock hardware.
+clock speeds. Expect TLS to work best on an accelerated machine, and to
+occasionally need a retry on genuinely stock hardware.
