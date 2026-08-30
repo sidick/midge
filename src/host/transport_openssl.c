@@ -23,6 +23,14 @@
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
 
+#include "tool_clock.h"
+
+/* Overall handshake budget - see the retry loop in
+ * transport_openssl_connect() below. Same value and same rationale as
+ * transport_amissl.c's MQTT_AMISSL_HANDSHAKE_TIMEOUT_MS: bounds a peer
+ * that accepts the TCP connect but never completes the handshake. */
+#define MQTT_OPENSSL_HANDSHAKE_TIMEOUT_MS 30000u
+
 static int openssl_send(void *ctx, const uint8_t *buf, size_t len)
 {
     openssl_ctx *c = (openssl_ctx *)ctx;
@@ -186,25 +194,60 @@ int transport_openssl_connect(mqtt_transport *out, openssl_ctx *ctx,
         return -1;
     }
 
-    ERR_clear_error();
-    if (SSL_connect(ssl) != 1) {
-        /* SSL_get_verify_result() MUST be read before SSL_free() - after
-         * free it silently reports X509_V_OK regardless of what actually
-         * happened, which would misreport every handshake failure as a
-         * verification success. */
-        long verify_result = SSL_get_verify_result(ssl);
+    /* A single SSL_connect() call is not actually enough: this socket is
+     * blocking with a 1s SO_RCVTIMEO (tcp_connect() above), and a read
+     * that hits that timeout makes the BIO layer set its retry flag and
+     * SSL_connect() return SSL_ERROR_WANT_READ - blocking mode only
+     * affects whether the underlying recv()/send() call itself blocks,
+     * not whether OpenSSL surfaces a retry indication when one comes
+     * back empty. One lost packet mid-handshake (TCP's own initial RTO is
+     * >=1s) or a slow broker would otherwise be reported as a fatal
+     * handshake failure instead of retried - a full connect() attempt is
+     * only actually done once every 1s of real elapsed time here, so this
+     * loop just keeps re-issuing SSL_connect() until it succeeds, fails
+     * for a real reason, or the overall budget below is spent. */
+    {
+        uint32_t handshake_start = tool_now_ms();
+        int rc, err;
 
-        fprintf(stderr, "mqtt: TLS handshake with %s:%u failed", host,
-                (unsigned)port);
-        if (verify_result != X509_V_OK)
-            fprintf(stderr, " (%s)",
-                    X509_verify_cert_error_string(verify_result));
-        fprintf(stderr, "\n");
+        for (;;) {
+            ERR_clear_error();
+            rc = SSL_connect(ssl);
+            if (rc == 1)
+                break;
+            err = SSL_get_error(ssl, rc);
+            if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+                break; /* real failure - fall through to the report below */
+            if (tool_now_ms() - handshake_start >
+                    MQTT_OPENSSL_HANDSHAKE_TIMEOUT_MS) {
+                fprintf(stderr, "mqtt: TLS handshake with %s:%u timed out\n",
+                        host, (unsigned)port);
+                SSL_free(ssl);
+                SSL_CTX_free(ssl_ctx);
+                close(fd);
+                return -1;
+            }
+        }
 
-        SSL_free(ssl);
-        SSL_CTX_free(ssl_ctx);
-        close(fd);
-        return -1;
+        if (rc != 1) {
+            /* SSL_get_verify_result() MUST be read before SSL_free() -
+             * after free it silently reports X509_V_OK regardless of what
+             * actually happened, which would misreport every handshake
+             * failure as a verification success. */
+            long verify_result = SSL_get_verify_result(ssl);
+
+            fprintf(stderr, "mqtt: TLS handshake with %s:%u failed", host,
+                    (unsigned)port);
+            if (verify_result != X509_V_OK)
+                fprintf(stderr, " (%s)",
+                        X509_verify_cert_error_string(verify_result));
+            fprintf(stderr, "\n");
+
+            SSL_free(ssl);
+            SSL_CTX_free(ssl_ctx);
+            close(fd);
+            return -1;
+        }
     }
 
     ctx->fd = fd;

@@ -14,6 +14,9 @@ every function.
 - AmigaOS 3.1+ (3.2 is the reference platform), 68020 or better.
 - A TCP/IP stack providing `bsdsocket.library` (Roadshow, AmiTCP, Miami, or
   an emulator-provided stack) - the same requirement as the CLI tools.
+- For `mco_TLS`: [AmiSSL](https://github.com/jens-maus/amissl) 5.x,
+  installed separately - see [Installation](Installation.md#installing-amissl-needed-for-tls).
+  Everything else in this page works identically without it.
 
 ## Installing
 
@@ -132,6 +135,30 @@ The default (a zeroed `MqttConnectOpts`, or `mco_AutoReconnect = FALSE`)
 is today's plain behaviour: an unexpected drop leaves the client
 disconnected until the caller makes a fresh `MQTT_Connect()` call.
 
+## TLS
+
+Setting `mco_TLS = TRUE` in `MqttConnectOpts` connects via AmiSSL instead
+of a plain TCP transport, with certificate and hostname verification on
+by default:
+
+- `mco_TLSInsecure = TRUE` skips certificate/hostname verification
+  (`SSL_VERIFY_NONE`) - for testing against self-signed or otherwise
+  untrusted brokers only, never for production use. Unlike the CLI tools'
+  `TLSINSECURE`/`-S` (which implies `TLS`/`-s`), the library's
+  `mco_TLSInsecure` is simply **ignored** unless `mco_TLS` is also set -
+  setting it alone does not turn TLS on.
+- `mco_CAFile` names a PEM file trusted as an extra CA, alongside
+  AmiSSL's bundled trust store - for a broker behind a private CA that
+  isn't in it. Ignored unless `mco_TLS` is set, and ignored if
+  `mco_TLSInsecure` is also set (nothing to verify against then).
+- If this build of `mqtt.library` has no AmiSSL support, or AmiSSL isn't
+  installed, `MQTT_Connect()` fails with `MQTTERR_NOTCONNECTED` - the
+  same as any other connect failure, not a distinct error code.
+- AmiSSL is CPU-intensive: a genuinely stock, unaccelerated 68020 has been
+  found to intermittently fail under it, while any real accelerator (or a
+  68030 or better) is reliable - see
+  [CLI Reference](CLI-Reference.md#a-note-on-tls-and-cpu-speed).
+
 ## Error codes
 
 Every function that returns a status returns 0 on success and a negative
@@ -141,10 +168,11 @@ code on failure:
 |---|---|---|
 | `MQTTERR_OK` | 0 | Success. |
 | `MQTTERR_NOMEM` | -200 | Out of memory creating the handle, a message port, or the subprocess. |
-| `MQTTERR_NOSTACK` | -201 | `CreateNewProcTags()` failed to start the connection subprocess. |
-| `MQTTERR_NOTCONNECTED` | -202 | Called before `MQTT_Connect()` succeeded, after `MQTT_Disconnect()`, or while auto-reconnect is mid-reconnect. |
+| `MQTTERR_NOSTACK` | -201 | Reserved for a `CreateNewProcTags()` failure - never actually returned today: `MQTT_CreateClient()` has no error-code channel and returns a bare `NULL` for every creation failure, including this one. |
+| `MQTTERR_NOTCONNECTED` | -202 | Called before `MQTT_Connect()` succeeded, after `MQTT_Disconnect()`, or while auto-reconnect is mid-reconnect. Also returned when `mco_TLS` was requested but this build/install has no AmiSSL support. |
 | `MQTTERR_TIMEOUT` | -203 | QoS 1 publish: no `PUBACK` within the retry budget. Subscribe: no `SUBACK` within ~10 seconds. |
 | `MQTTERR_REFUSED` | -204 | Subscribe: the broker's `SUBACK` refused the subscription. |
+| `MQTTERR_STATE` | -205 | `MQTT_Connect()` called on a handle that's already connected (a prior `MQTT_Connect()` succeeded and neither `MQTT_Disconnect()` nor an unexpected drop has happened since). |
 
 Other negative values are passed straight through from the portable MQTT
 codec below the library (a malformed packet, a rejected `CONNECT`, and so
