@@ -5,6 +5,7 @@
 
 # Copperline on-target tests: cross-built binaries staged into boot volumes.
 tests/copperline/sys/C/codec_selftest
+tests/copperline/amissl-spike/build/
 tests/net/sys/C/mqtt_pub
 tests/net/sys/C/mqtt_pub-static
 tests/net/sys/Libs/mqtt.library

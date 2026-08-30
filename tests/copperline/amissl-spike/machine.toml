@@ -1,0 +1,29 @@
+# Copperline machine profile for the AmiSSL de-risking spike (issue #3).
+# The boot volume is now a real amibake-built AmigaOS 3.2.2 + AmiSSL 5.27
+# image (~/src/amibake, manifests/AmiSSLSpike.toml) rather than a
+# hand-staged sys/ directory - a genuine 68020/OS3.0+ install needs a real
+# Kickstart ROM (unlike the bundled-AROS minimal boot this replaces), so
+# this points at the same licensed ROM asset amibake resolved against.
+rom = "/Users/simond/src/amibake/assets/roms/kickstart-47.7.rom"
+
+[cpu]
+model = "68020"
+
+[memory]
+chip = "1M"
+fast = "8M"
+
+[floppy]
+drives = 1
+
+[[filesys]]
+path = "/Users/simond/src/amibake/manifests/AmiSSLSpike"
+volume = "AmiSSLSpike"
+bootpri = 10
+
+[hostsocket]
+net = "host"
+
+[emulation]
+power_on = true
+warp_speed = "max"

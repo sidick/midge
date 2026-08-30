@@ -1,0 +1,26 @@
+; AmiSSL de-risking spike (midge issue #3, Milestone 2) - runs amisslspike
+; repeatedly against a TLS Mosquitto reachable via Copperline's HostSocket
+; board, to check SSL_set_fd + WaitSelect-gated handshake reliability.
+; Staged into the amibake-built image's S:User-Startup by run.sh on every
+; run - this file, not amibake's own template, is the source of truth.
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+amisslspike 127.0.0.1 18883 nonblock
+echo "SPIKE: ALL-DONE"

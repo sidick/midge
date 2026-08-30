@@ -86,3 +86,18 @@ host builds so far:
 TLS is opt-in and off by default everywhere in midge. The Amiga-side TLS
 transport (via AmiSSL) is not yet wired up - `-s`/`-S` currently apply to
 the host builds only.
+
+### A note on TLS and CPU speed
+
+Software TLS is CPU-intensive, and de-risking work for the Amiga-side
+AmiSSL transport found that a genuinely stock, unaccelerated 68020
+(around 14MHz, e.g. an A1200's 68EC020) sits right at the edge of a
+timing-sensitive failure: the handshake completes, but the connection can
+then fail intermittently on the write that follows it. A modest speed
+bump - any real accelerator, or a 68030 or better - clears this
+reliably. This isn't specific to midge: [AmiSSL's own maintainer has
+reached the same conclusion](https://github.com/jens-maus/amissl/issues/111)
+for other software - "the Amiga can't keep up with modern SSL" at stock
+clock speeds. Once TLS ships on the Amiga side, expect it to work best on
+an accelerated machine, and to occasionally need a retry on genuinely
+stock hardware.
