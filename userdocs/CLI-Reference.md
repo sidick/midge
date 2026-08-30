@@ -35,6 +35,8 @@ mqtt_pub HOST/A,PORT/N/K,TOPIC/A,MESSAGE/K,FILE/K,QOS/N/K,CLIENTID/K,USER/K,
 | `KEEPALIVE` | Keepalive interval in seconds (default 60). |
 | `RETAIN` | Set the broker's retained flag on this message. |
 | `VERBOSE` | Print connection and protocol detail to stdout. |
+| `TLS` | Connect over TLS via AmiSSL, with certificate and hostname verification on. Default build only - see [TLS on the Amiga](#tls-on-the-amiga). When no `PORT` is given, the default becomes 8883 instead of 1883. |
+| `TLSINSECURE` | Connect over TLS but skip certificate verification (implies `TLS`). For testing against self-signed or otherwise untrusted brokers only. |
 
 Example:
 
@@ -63,6 +65,8 @@ mqtt_sub HOST/A,PORT/N/K,TOPIC/A,QOS/N/K,CLIENTID/K,USER/K,PASSWORD/K,
 | `KEEPALIVE` | Keepalive interval in seconds (default 60). |
 | `COUNT` | Exit after receiving this many messages. |
 | `VERBOSE` | Print connection and protocol detail to stdout. |
+| `TLS` | Connect over TLS via AmiSSL, with certificate and hostname verification on. Default build only - see [TLS on the Amiga](#tls-on-the-amiga). When no `PORT` is given, the default becomes 8883 instead of 1883. |
+| `TLSINSECURE` | Connect over TLS but skip certificate verification (implies `TLS`). For testing against self-signed or otherwise untrusted brokers only. |
 
 Example:
 
@@ -83,9 +87,26 @@ host builds so far:
 | `-s` | Enable TLS, with certificate and hostname verification on, checked against the system trust store. When no `-p` is given, the default port becomes 8883 instead of 1883. |
 | `-S` | Enable TLS but skip certificate verification. Intended only for testing against self-signed or otherwise untrusted brokers. |
 
-TLS is opt-in and off by default everywhere in midge. The Amiga-side TLS
-transport (via AmiSSL) is not yet wired up - `-s`/`-S` currently apply to
-the host builds only.
+TLS is opt-in and off by default everywhere in midge.
+
+## TLS on the Amiga
+
+The default (mqtt.library-linked) `mqtt_pub`/`mqtt_sub` support TLS via
+the `TLS`/`TLSINSECURE` switches above. Requirements:
+
+- [AmiSSL](https://github.com/jens-maus/amissl) 5.x installed - its
+  installer sets up `LIBS:amisslmaster.library`, the CPU-tier
+  `LIBS:AmiSSL/` library, and the `AmiSSL:` assign the cert store is read
+  through. All three are needed; without them `TLS` fails with a connect
+  error (and a missing `AmiSSL:` assign in particular will make AmigaOS
+  ask for the volume by requester).
+- This build of `mqtt.library` compiled with AmiSSL support (release
+  builds are; a from-source build needs `make fetch-amissl-sdk` first -
+  see the Makefile).
+
+The statically linked `mqtt_pub-static`/`mqtt_sub-static` have no AmiSSL
+support and reject `TLS` outright rather than silently connecting in
+plaintext.
 
 ### A note on TLS and CPU speed
 

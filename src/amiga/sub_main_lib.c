@@ -71,6 +71,8 @@ int main(void)
     co.mco_KeepAlive = opts.keepalive;
     co.mco_CleanSession = TRUE;
     co.mco_AutoReconnect = FALSE;
+    co.mco_TLS = opts.tls ? TRUE : FALSE;
+    co.mco_TLSInsecure = opts.tls_insecure ? TRUE : FALSE;
 
     if (opts.verbose)
         printf("mqtt_sub: connecting to %s:%u\n", opts.host,
