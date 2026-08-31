@@ -42,5 +42,6 @@ nav:
   - Home: index.md
   - Installation: Installation.md
   - CLI Reference: CLI-Reference.md
+  - mqttstats: mqttstats.md
   - mqtt.library: mqtt-library.md
   - mqtt.library API Reference: mqtt-library-reference.md

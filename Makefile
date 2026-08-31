@@ -156,8 +156,8 @@ lint:
 test: $(BUILD)/run-tests
 	$(BUILD)/run-tests
 
-$(BUILD)/run-tests: $(CORE_SRCS) $(TEST_SRCS) $(CORE_HDRS) $(TEST_HDRS) | $(BUILD)/.dir
-	$(CC) $(CFLAGS) $(CObjINC) -Itests $(CORE_SRCS) $(TEST_SRCS) -o $@
+$(BUILD)/run-tests: $(CORE_SRCS) $(TEST_SRCS) src/tools/ha_discovery.c $(CORE_HDRS) $(TEST_HDRS) | $(BUILD)/.dir
+	$(CC) $(CFLAGS) $(CObjINC) -Isrc/tools -Itests $(CORE_SRCS) $(TEST_SRCS) src/tools/ha_discovery.c -o $@
 
 # --- Host: native tools (for local development and the broker smoke test) ---
 # Named distinctly from the m68k binaries so the two don't collide on a
@@ -193,6 +193,7 @@ m68k: library-headers | $(BUILD)/.dir
 	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -I$(LIB_INCDIR) src/amiga/args.c src/amiga/sub_main_lib.c -o $(BUILD)/mqtt_sub
 	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/pub_main.c -o $(BUILD)/mqtt_pub-static
 	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) $(CORE_SRCS) $(TOOLS_SRCS) $(AMIGA_SRCS) src/amiga/sub_main.c -o $(BUILD)/mqtt_sub-static
+	$(M68K_CC) $(M68K_CFLAGS) $(VERSION_DEFS) -I$(LIB_INCDIR) src/tools/ha_discovery.c src/amiga/mqttstats_main.c -lamiga -o $(BUILD)/mqttstats
 
 m68k-docker:
 	$(DOCKER) run --rm --platform linux/amd64 $(DOCKER_USER) -v "$(CURDIR)":/work -w /work \
@@ -507,7 +508,7 @@ dist: guide $(LHA)
 	$(MAKE) build
 	@grep -aq "amisslmaster.library" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library has no AmiSSL/TLS support - refusing to release (see M68K_HAS_AMISSL / make fetch-amissl-sdk)"; exit 1; }
 	@v=$$(sed -n 's/^#define MIDGE_VERSION[[:space:]]*"\(.*\)"$$/\1/p' src/version.h); \
-	for b in mqtt_pub mqtt_sub mqtt_pub-static mqtt_sub-static; do \
+	for b in mqtt_pub mqtt_sub mqtt_pub-static mqtt_sub-static mqttstats; do \
 		grep -aqF "\$$VER: $$b $$v (" $(BUILD)/$$b || { echo "dist: $(BUILD)/$$b lacks \"\$$VER: $$b $$v (...)\" - stale build/?"; exit 1; }; \
 	done; \
 	grep -aqF "\$$VER: mqtt.library 1.0 (" $(BUILD)/mqtt.library || { echo "dist: $(BUILD)/mqtt.library lacks \"\$$VER: mqtt.library 1.0 (...)\" - stale build/? (library \$$VER tracks LibVersion.LibRevision, not MIDGE_VERSION - see src/library/libinit.c)"; exit 1; }
@@ -517,7 +518,8 @@ dist: guide $(LHA)
 		$(BUILD)/dist/midge/developer/inline $(BUILD)/dist/midge/developer/libraries \
 		$(BUILD)/dist/midge/developer/examples
 	cp $(BUILD)/mqtt_pub $(BUILD)/mqtt_sub $(BUILD)/mqtt_pub-static $(BUILD)/mqtt_sub-static \
-		$(BUILD)/midge.guide LICENSE midge.readme $(BUILD)/dist/midge/
+		$(BUILD)/mqttstats $(BUILD)/midge.guide LICENSE midge.readme $(BUILD)/dist/midge/
+	cp icons/mqttstats.info $(BUILD)/dist/midge/mqttstats.info
 	cp $(BUILD)/mqtt.library $(BUILD)/dist/midge/libs/
 	cp src/library/mqtt_lib.sfd src/library/mqtt.doc $(BUILD)/dist/midge/developer/
 	cp $(LIB_INCDIR)/fd/mqtt_lib.fd $(BUILD)/dist/midge/developer/fd/

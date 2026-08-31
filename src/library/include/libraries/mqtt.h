@@ -177,4 +177,17 @@ struct MqttMessage {
                                         MQTT_Disconnect() nor an unexpected
                                         drop has happened since) */
 
+/* One src/core/mqtt_client.h mqtt_client_err value worth a public name here:
+ * MQTT_Connect() returns this (unchanged from core's own
+ * -MQTT_CLIENT_ERR_CONNECT_REFUSED) when a CONNACK actually arrived but
+ * carried a non-zero return code - bad username/password, not authorized,
+ * an unacceptable protocol version, a rejected client id, or the broker
+ * reporting itself unavailable. Unlike a timeout or transport failure, this
+ * is the broker actively saying no: not something a caller should retry
+ * unchanged and expect to eventually succeed - see mqttstats_main.c's own
+ * use of it to tell "broker is down/unreachable, keep retrying" apart from
+ * "config is wrong, stop and tell someone" for a WBStartup-launched daemon
+ * with no other way to surface the difference. */
+#define MQTT_CONNECT_REFUSED (-102)
+
 #endif /* LIBRARIES_MQTT_H */

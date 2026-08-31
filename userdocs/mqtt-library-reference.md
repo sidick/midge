@@ -152,7 +152,16 @@ families of negative codes are possible:
     so on. See those two headers in the project's source for the
     exact list; from a caller's point of view the only thing that
     matters is that any negative return is a failure and 0 is
-    success.
+    success - with one exception worth a public name in
+    <libraries/mqtt.h>: MQTT_CONNECT_REFUSED (-102), which
+    MQTT_Connect() returns when a CONNACK actually arrived but
+    carried a non-zero return code (bad credentials, rejected
+    client id, unacceptable protocol version, or the broker
+    reporting itself unavailable). Unlike a timeout or transport
+    failure, that is the broker actively saying no - a caller
+    that retries on any other failure but treats this one as
+    terminal (and tells its user why) will behave better than one
+    that treats every failure alike.
 ```
 
 ### See Also

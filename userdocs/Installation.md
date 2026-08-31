@@ -14,6 +14,7 @@ The Aminet archive is a single drawer, `midge`, containing:
 midge/
   mqtt_pub, mqtt_sub                  the default tools (need mqtt.library)
   mqtt_pub-static, mqtt_sub-static    statically linked, no library needed
+  mqttstats, mqttstats.info           headless HA telemetry Commodity (needs mqtt.library)
   midge.guide                         this documentation, for MultiView/AmigaGuide
   midge.readme, LICENSE
   libs/
@@ -30,8 +31,9 @@ specific location.
 
 ## Installing mqtt.library (needed for the default tools)
 
-`mqtt_pub`/`mqtt_sub` - the tools you get by just typing their names - are
-built against `mqtt.library` and need it present at `LIBS:` to run:
+`mqtt_pub`/`mqtt_sub` and `mqttstats` - the tools you get by just typing
+their names - are built against `mqtt.library` and need it present at
+`LIBS:` to run:
 
 ```
 Copy midge/libs/mqtt.library LIBS:
