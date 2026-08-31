@@ -147,11 +147,24 @@ def icon(art, do_type, default_tool=None, tooltypes=(), stack=8192):
 
 
 ICONS = {
+    # Every mqttstats ToolType (see read_config() in mqttstats_main.c)
+    # listed, all wrapped in parens - IconEdit's "disabled" convention: shown
+    # grayed out, not passed to the program, so a plain double-click without
+    # any editing still hits the "HOST required" error rather than silently
+    # connecting to the sample IP. Edit an entry in place to activate it.
     'mqttstats.info': dict(art=ART_MQTTSTATS, do_type=WBTOOL, stack=8192,
                            tooltypes=('(HOST=192.168.1.10)',
+                                      '(PORT=1883)',
                                       '(CLIENTID=midge-stats)',
+                                      '(DEVICENAME=Amiga)',
+                                      '(NODEID=)',
+                                      '(USER=)',
+                                      '(PASSWORD=)',
+                                      '(TLS=1)',
+                                      '(TLSINSECURE=1)',
+                                      '(CAFILE=)',
                                       '(INTERVAL=60)',
-                                      'CX_PRIORITY=0')),
+                                      '(CX_PRIORITY=0)')),
 }
 
 

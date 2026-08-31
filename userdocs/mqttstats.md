@@ -20,6 +20,8 @@ Once running, `mqttstats` connects to your broker and publishes, every
 | Chip RAM free | bytes | `AvailMem(MEMF_CHIP)`. |
 | Fast RAM free | bytes | `AvailMem(MEMF_FAST)`. |
 | CPU model | - | `68020`/`68030`/`68040`/`68060`, detected from `AttnFlags`. |
+| Kickstart version | - | exec.library's version, e.g. `47.96` - the ROM. |
+| Workbench version | - | workbench.library's version, e.g. `47.102` - the installed disk-based release, which can genuinely differ from the Kickstart ROM (a newer ROM with an older Workbench install, or vice versa). Reported as `unavailable` on the rare setup that's never had Workbench loaded at all. |
 
 It also publishes an availability topic (`online` while running, `offline`
 on a clean shutdown) and registers a Home Assistant MQTT Discovery config
@@ -63,18 +65,35 @@ with the same `CLIENTID` would collide on both.
 alongside the binary) - copy both together wherever you put `mqttstats`.
 Open its Information window (Workbench's Icons menu, or right-click on
 some Workbench versions) and set at least `HOST` in the Tool Types list;
-the icon ships with a few common ones already listed as comments (shown
-grayed out, in parentheses) as a reminder of what's available - edit them
-in place to activate. Then either double-click the icon to run it, or drag
-it into `WBStartup:` to have it launch silently every boot.
+the icon ships with every ToolType from the table above already listed,
+each as a comment (shown grayed out, in parentheses) with a sample value -
+edit an entry in place to activate it. Then either double-click the icon
+to run it, or drag it into `WBStartup:` to have it launch silently every
+boot.
 
-Either way, nothing appears on screen - if `HOST` is missing or a library
-fails to open, `mqttstats` quits immediately with no visible indication
-(diagnostics go to the serial port only, for anyone debugging under an
-emulator or with a serial cable attached - see
+Either way, nothing appears on screen for most problems - if `HOST` is
+missing or a library fails to open, `mqttstats` quits immediately with no
+visible indication (diagnostics go to the serial port only, for anyone
+debugging under an emulator or with a serial cable attached - see
 [CLI Reference](CLI-Reference.md) for the general shape of Amiga tool
-diagnostics). Check Home Assistant for the expected entities to confirm
-it's actually connected.
+diagnostics). One exception: if the broker actively refuses the
+connection (wrong credentials, rejected client id, and similarly
+config-level problems), `mqttstats` pops up a one-off requester saying so
+before quitting - unlike a transient network problem (see below), no
+amount of retrying fixes a config problem, so it's worth actually telling
+someone. Otherwise, check Home Assistant for the expected entities to
+confirm it's actually connected.
+
+### Connecting before the network is up
+
+`mqttstats` retries the initial connection with capped exponential backoff
+(1s, 2s, 4s, ... up to 32s, indefinitely) rather than quitting on the
+first failure - deliberately, since there's no guaranteed WBStartup
+ordering against your TCP/IP stack's own startup entry (Roadshow/AmiTCP/
+Miami). Dropped into `WBStartup:` alongside your stack, `mqttstats` simply
+keeps trying quietly in the background until the network - and the
+broker - are reachable, however long that takes. Killing it via
+Commodities Exchange during this retry works the same as once connected.
 
 ### Running from a Shell
 
@@ -92,9 +111,9 @@ Nothing needs configuring on the Home Assistant side beyond
 [MQTT discovery being enabled](https://www.home-assistant.io/integrations/mqtt/#configuration)
 (the default for HA's own MQTT integration). Once `mqttstats` connects:
 
-1. Each of the four sensors above appears automatically under a device
-   named after `DEVICENAME`, grouped with any other `mqttstats` sensors
-   from the same Amiga.
+1. Each of the sensors above appears automatically under a device named
+   after `DEVICENAME`, grouped with any other `mqttstats` sensors from the
+   same Amiga.
 2. The device shows as unavailable if `mqttstats` disconnects
    (broker down, network dropped, `mqttstats` killed via Exchange) and
    available again once it reconnects or restarts.

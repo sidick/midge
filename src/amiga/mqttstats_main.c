@@ -38,12 +38,14 @@
 #include <devices/timer.h>
 #include <libraries/commodities.h>
 #include <libraries/mqtt.h>
+#include <intuition/intuition.h>
 
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/commodities.h>
 #include <proto/mqtt.h>
 #include <proto/timer.h>
+#include <proto/intuition.h>
 
 #include <clib/alib_protos.h> /* ArgArrayInit/ArgArrayDone/ArgString/ArgInt -
                                   amiga.lib, not an LVO library: no proto
@@ -91,7 +93,17 @@ static void raw_str(const char *s)
  * mqtt.library itself. */
 struct Library *MqttBase;
 struct Library *CxBase;
+struct IntuitionBase *IntuitionBase; /* opened only for the connect-refused
+                                         alert below - see
+                                         alert_connect_refused(). proto/
+                                         intuition.h itself declares this
+                                         extern (typed struct IntuitionBase
+                                         *, unlike the plain struct Library
+                                         * every other base here uses) -
+                                         this is the matching definition,
+                                         not a fresh global. */
 struct Device *TimerBase;
+struct Library *WorkbenchBase; /* version only - see workbench_version() */
 
 /* Poll tick for the main loop - see run_loop()'s own comment for why a
  * plain Delay()-based poll was chosen over multiplexing a WaitSelect()-
@@ -253,6 +265,84 @@ static const char *cpu_model(void)
     return "68000";
 }
 
+/* format_bcd_version() below works around a confirmed m68k-amigaos-gcc -O2
+ * miscompile (not an AmigaOS/NDK issue): reading a UWORD struct field
+ * (lib_Version/lib_Revision) into an sprintf() "%u" call leaves garbage in
+ * the promoted value's upper 16 bits - confirmed via an isolated repro,
+ * -O0 unaffected. Neither an explicit `& 0xFFFF` mask (optimized away as
+ * "provably redundant" by GCC's own - wrong, here - UWORD range analysis;
+ * confirmed by a byte-identical rebuild with and without it) nor routing
+ * through a `volatile` local (works in an isolated repro but NOT in this
+ * file's actual build - confirmed on-target, still wrong here) reliably
+ * fixed it, which means whatever's really going on is sensitive to this
+ * file's surrounding code, not just the read+format pattern in isolation.
+ * Sidestepping sprintf's "%u" varargs path entirely with a plain,
+ * never-inlined, non-variadic formatter is the one approach confirmed
+ * correct on-target for these two call sites - see the version-history
+ * around this comment (git blame) if a future toolchain upgrade makes it
+ * worth revisiting whether this workaround is still needed. */
+static void __attribute__((noinline))
+format_bcd_version(char *buf, unsigned long ver, unsigned long rev)
+{
+    unsigned long vals[2];
+    int vi;
+    char *p = buf;
+
+    vals[0] = ver;
+    vals[1] = rev;
+    for (vi = 0; vi < 2; vi++) {
+        char digits[6];
+        int n = 0;
+        unsigned long v = vals[vi];
+
+        if (vi == 1)
+            *p++ = '.';
+        if (v == 0) {
+            digits[n++] = '0';
+        } else {
+            while (v > 0 && n < (int) sizeof(digits)) {
+                digits[n++] = (char) ('0' + (v % 10));
+                v /= 10;
+            }
+        }
+        while (n > 0)
+            *p++ = digits[--n];
+    }
+    *p = '\0';
+}
+
+/* Kickstart's own version is just exec.library's - SysBase is always open
+ * (it's how every program gets here at all), so unlike workbench_version()
+ * below there's no "library missing" case to handle. */
+static void kickstart_version(char *buf)
+{
+    struct ExecBase *eb = (struct ExecBase *) SysBase;
+    volatile unsigned long ver = eb->LibNode.lib_Version;
+    volatile unsigned long rev = eb->LibNode.lib_Revision;
+
+    format_bcd_version(buf, ver, rev);
+}
+
+/* Kickstart (ROM) and Workbench (disk-based) versions can genuinely differ
+ * - e.g. a newer ROM booted against an older Workbench disk set, or vice
+ * versa - so this is deliberately a separate sensor from kickstart_version
+ * above, not assumed to always match it. workbench.library's own version
+ * tracks the installed Workbench release the same way exec.library's
+ * tracks Kickstart. WorkbenchBase is opened once in main() and may be NULL
+ * (a bare CLI-only setup that's never actually installed/loaded Workbench,
+ * however rare) - reported as "unavailable" rather than a misleading 0.0. */
+static void workbench_version(char *buf)
+{
+    if (WorkbenchBase) {
+        volatile unsigned long ver = WorkbenchBase->lib_Version;
+        volatile unsigned long rev = WorkbenchBase->lib_Revision;
+
+        format_bcd_version(buf, ver, rev);
+    } else {
+        strcpy(buf, "unavailable");
+    }
+}
+
 /* --- Publishing ---------------------------------------------------------- */
 
 static int publish_retained(APTR client, const char *topic, const char *value,
@@ -286,6 +376,16 @@ static void publish_discovery(APTR client, const ha_device *dev)
         ha_discovery_payload(dev, "cpu_model", "CPU Model", NULL, NULL,
                               payload, sizeof(payload)) > 0)
         publish_retained(client, topic, payload, 1);
+
+    if (ha_discovery_topic(dev, "kickstart_version", topic, sizeof(topic)) > 0 &&
+        ha_discovery_payload(dev, "kickstart_version", "Kickstart Version",
+                              NULL, NULL, payload, sizeof(payload)) > 0)
+        publish_retained(client, topic, payload, 1);
+
+    if (ha_discovery_topic(dev, "workbench_version", topic, sizeof(topic)) > 0 &&
+        ha_discovery_payload(dev, "workbench_version", "Workbench Version",
+                              NULL, NULL, payload, sizeof(payload)) > 0)
+        publish_retained(client, topic, payload, 1);
 }
 
 static void publish_availability(APTR client, const ha_device *dev,
@@ -316,6 +416,100 @@ static void publish_state(APTR client, const ha_device *dev)
     }
     if (ha_state_topic(dev, "cpu_model", topic, sizeof(topic)) > 0)
         publish_retained(client, topic, cpu_model(), 0);
+    if (ha_state_topic(dev, "kickstart_version", topic, sizeof(topic)) > 0) {
+        kickstart_version(value);
+        publish_retained(client, topic, value, 0);
+    }
+    if (ha_state_topic(dev, "workbench_version", topic, sizeof(topic)) > 0) {
+        workbench_version(value);
+        publish_retained(client, topic, value, 0);
+    }
+}
+
+/* --- Initial-connect retry ------------------------------------------------
+ *
+ * mco_AutoReconnect (see MQTT_CreateClient()'s opts) only covers a drop
+ * *after* MQTT_Connect() has already succeeded once - it explicitly does
+ * not retry a failed first attempt (see <libraries/mqtt.h>'s own comment on
+ * mco_AutoReconnect). That matters here specifically because mqttstats is
+ * meant to run from WBStartup, where there's no guaranteed ordering against
+ * the TCP/IP stack's own WBStartup entry (Roadshow/AmiTCP/Miami) - launched
+ * before bsdsocket.library is up, a bare single MQTT_Connect() attempt
+ * would just fail once and quit for the rest of the session. So this loop
+ * retries MQTT_Connect() itself, with the same capped exponential backoff
+ * mco_AutoReconnect uses internally (1s, 2s, 4s, ... capped at 32s,
+ * forever) - EXCEPT for MQTT_CONNECT_REFUSED (see alert_connect_refused()
+ * below), which means the broker is up and actively saying no: retrying
+ * that unchanged would just spam it forever for no reason, so it stops and
+ * surfaces the problem instead. */
+
+/* Polls cxport/CTRL_C in MQTTSTATS_POLL_TICKS chunks across a backoff wait,
+ * so a Kill from Exchange (or Ctrl-C from a Shell launch) can interrupt a
+ * long wait instead of only being noticed once run_loop() itself starts.
+ * ENABLE/DISABLE while still trying to connect have nothing to toggle yet
+ * (no client, no availability topic to publish), so are drained and
+ * ignored here - Exchange's Enable/Disable simply has no effect until the
+ * initial connect succeeds. Returns TRUE if the caller should give up
+ * (killed/interrupted), FALSE if the wait completed normally. */
+static BOOL wait_ticks_or_kill(struct MsgPort *cxport, ULONG total_ticks)
+{
+    ULONG waited = 0;
+
+    while (waited < total_ticks) {
+        if (cxport) {
+            CxMsg *cxm;
+            while ((cxm = (CxMsg *) GetMsg(cxport)) != NULL) {
+                ULONG type = CxMsgType(cxm);
+                ULONG id = CxMsgID(cxm);
+                ReplyMsg((struct Message *) cxm);
+                if (type == CXM_COMMAND && id == CXCMD_KILL)
+                    return TRUE;
+            }
+        }
+        if (SetSignal(0, 0) & SIGBREAKF_CTRL_C) {
+            SetSignal(0, SIGBREAKF_CTRL_C);
+            return TRUE;
+        }
+        Delay(MQTTSTATS_POLL_TICKS);
+        waited += MQTTSTATS_POLL_TICKS;
+    }
+    return FALSE;
+}
+
+/* MQTT_CONNECT_REFUSED means a config problem (bad credentials, rejected
+ * client id, ...) that silently retrying forever will never fix - only
+ * relaunching after editing the icon's ToolTypes will. Left to just quit
+ * quietly (the original design, see this file's own history), a broker
+ * that requires auth but was never given any would fail every single
+ * launch with no visible indication why. mqtt.library itself has no idea
+ * this alert exists or should happen - it only ever returns the plain
+ * negative code above; opening intuition.library and deciding to show
+ * something is entirely this application's own choice, same as any other
+ * mqtt.library caller is free to make differently. */
+static void alert_connect_refused(const char *host)
+{
+    struct EasyStruct es;
+
+    raw_str("mqttstats: broker refused the connection (bad credentials, "
+            "client id, or protocol version?)\r\n");
+
+    IntuitionBase = (struct IntuitionBase *)
+        OpenLibrary((STRPTR) "intuition.library", 37);
+    if (!IntuitionBase)
+        return;
+
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (UBYTE *) "mqttstats";
+    es.es_TextFormat = (UBYTE *)
+        "mqttstats: %s refused the connection.\n"
+        "Check HOST/USER/PASSWORD/CLIENTID in this icon's Tool Types, "
+        "then relaunch.";
+    es.es_GadgetFormat = (UBYTE *) "OK";
+    EasyRequest(NULL, &es, NULL, host);
+
+    CloseLibrary((struct Library *) IntuitionBase);
+    IntuitionBase = NULL;
 }
 
 /* --- Main loop ------------------------------------------------------------
@@ -476,6 +670,10 @@ int main(int argc, char **argv)
         goto cleanup_cx;
     }
 
+    /* Non-fatal: workbench_version() reports "unavailable" if this fails -
+     * see that function's own comment. */
+    WorkbenchBase = OpenLibrary((STRPTR) "workbench.library", 0);
+
     /* Keepalive comfortably above our own publish interval (see run_loop()'s
      * banner): our periodic PUBLISHes alone keep the broker's keepalive
      * tracking satisfied, since ANY MQTT packet counts, not specifically a
@@ -498,16 +696,36 @@ int main(int argc, char **argv)
     opts.mco_TLSInsecure = cfg.tls_insecure;
     opts.mco_CAFile = cfg.ca_file;
 
-    client = MQTT_CreateClient(cfg.host, cfg.port, &opts);
-    if (!client) {
-        raw_str("mqttstats: MQTT_CreateClient failed\r\n");
-        exit_code = 20;
-        goto cleanup_lib;
-    }
-    if (MQTT_Connect(client) != 0) {
-        raw_str("mqttstats: connect failed\r\n");
-        exit_code = 20;
-        goto cleanup_client;
+    {
+        ULONG backoff_secs = 1;
+
+        for (;;) {
+            LONG rc;
+
+            client = MQTT_CreateClient(cfg.host, cfg.port, &opts);
+            if (client) {
+                rc = MQTT_Connect(client);
+                if (rc == 0)
+                    break; /* connected - fall through below */
+                if (rc == MQTT_CONNECT_REFUSED) {
+                    alert_connect_refused((const char *) cfg.host);
+                    MQTT_DeleteClient(client);
+                    client = NULL;
+                    exit_code = 20;
+                    goto cleanup_lib;
+                }
+                MQTT_DeleteClient(client);
+                client = NULL;
+            }
+            raw_str("mqttstats: connect failed, retrying...\r\n");
+            if (wait_ticks_or_kill(cxport, backoff_secs * 50)) {
+                /* Killed via Exchange, or Ctrl-C from a Shell launch,
+                 * before ever connecting - a clean exit, not an error. */
+                goto cleanup_lib;
+            }
+            if (backoff_secs < 32)
+                backoff_secs *= 2;
+        }
     }
 
     publish_discovery(client, &dev);
@@ -519,9 +737,10 @@ int main(int argc, char **argv)
     publish_availability(client, &dev, "offline");
     MQTT_Disconnect(client);
 
-cleanup_client:
     MQTT_DeleteClient(client);
 cleanup_lib:
+    if (WorkbenchBase)
+        CloseLibrary(WorkbenchBase);
     CloseLibrary(MqttBase);
 cleanup_cx:
     if (broker)
