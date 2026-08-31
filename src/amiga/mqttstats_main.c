@@ -189,16 +189,25 @@ static void read_config(STRPTR *tt, mqttstats_config *cfg,
 
 /* --- Telemetry gathering ------------------------------------------------ */
 
-/* timer.device's TR_GETSYSTIME reports seconds+micros since the last
- * system reset - genuinely monotonic, unlike dos.library's DateStamp()
- * (see tool_clock.h's own comment on issue #8). That distinction doesn't
- * matter for mqtt.library or the CLI tools (multi-connection subprocess
- * statics are off the table there), but this program is a standalone
- * singleton (NBU_UNIQUE enforces at most one instance), so opening the
- * device once at startup and keeping it for the process's lifetime is
- * completely safe - there is no second instance to trample it. Used for
- * both the reported "uptime" metric and this program's own interval
- * scheduling (avoiding the exact clock-jump hazard issue #8 documents). */
+/* An earlier version of this file used timer.device's TR_GETSYSTIME here,
+ * on the mistaken premise that it reports elapsed time since the last
+ * system reset. It doesn't: TR_GETSYSTIME returns the *system clock* -
+ * the same absolute, calendar-rooted clock dos.library's DateStamp() is
+ * built on (seconds since 1978-01-01, set from the battery-backed RTC at
+ * boot if one's fitted) - just with sub-second precision. Reported as
+ * "uptime" it produced a nonsensical near-50-year value on any machine
+ * with a working clock; caught in real use, not in testing. What's
+ * actually wanted is `ReadEClock()`'s free-running hardware tick counter
+ * (see uptime_secs() below): it genuinely does reset to 0 at power-on,
+ * has no notion of calendar date at all, and is exactly as immune to the
+ * DateStamp() clock-jump hazard issue #8 documents (a live SetClock or
+ * timezone change can't move it) - it just doesn't ALSO track wall time,
+ * which this program never needed anyway. Used for both the reported
+ * "uptime" metric and this program's own interval scheduling. This
+ * program is a standalone singleton (NBU_UNIQUE enforces at most one
+ * instance), so opening the device once at startup and keeping it for
+ * the process's lifetime is completely safe - there is no second
+ * instance to trample it. */
 static struct timerequest *g_timerreq;
 static struct MsgPort *g_timerport;
 
@@ -242,12 +251,17 @@ static void close_timer(void)
     }
 }
 
-/* Seconds since the last system reset. */
+/* Seconds since the last system reset - see this section's own banner
+ * comment for why this is ReadEClock(), not TR_GETSYSTIME. ReadEClock()
+ * is a direct library call through TimerBase (set by open_timer()'s
+ * OpenDevice(), any unit), not an IORequest - no DoIO() here. */
 static ULONG uptime_secs(void)
 {
-    g_timerreq->tr_node.io_Command = TR_GETSYSTIME;
-    DoIO((struct IORequest *)g_timerreq);
-    return (ULONG) g_timerreq->tr_time.tv_secs;
+    struct EClockVal ec;
+    ULONG freq = ReadEClock(&ec);
+    unsigned long long ticks = ((unsigned long long) ec.ev_hi << 32) | ec.ev_lo;
+
+    return freq ? (ULONG) (ticks / freq) : 0;
 }
 
 static const char *cpu_model(void)
