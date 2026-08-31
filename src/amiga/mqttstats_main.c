@@ -652,7 +652,12 @@ int main(int argc, char **argv)
         nb.nb_Version = NB_VERSION;
         nb.nb_Name = (STRPTR) "mqttstats";
         nb.nb_Title = (STRPTR) "midge mqttstats";
-        nb.nb_Descr = (STRPTR) "Publishes Amiga telemetry to Home Assistant via MQTT";
+        /* Exchange's list truncates this on OS 3.1 well before the end -
+         * "Home Assistant" needs to land safely inside that limit rather
+         * than run off the end of the string, or it gets cut mid-word
+         * ("...to Home Ass"). "Home Assistant" ends at character 33 here,
+         * comfortably inside the ~37-character cutoff observed on 3.1. */
+        nb.nb_Descr = (STRPTR) "Amiga telemetry to Home Assistant via MQTT";
         nb.nb_Unique = NBU_UNIQUE;
         nb.nb_Flags = 0; /* no window - nothing for Exchange to Show/Hide */
         nb.nb_Pri = cfg.cx_priority;
