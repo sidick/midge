@@ -1,11 +1,12 @@
 #!/bin/sh
 # run.sh — headless Copperline on-target smoke test for the MQTT codec.
 #
-# Boots a 68020 from ./sys (a throwaway RAM volume built from this host
-# directory). The Startup-Sequence runs C:codec_selftest, which exercises
-# the same vectors as tests/test_codec.c and emits PASS/FAIL lines over
-# serial via RawPutChar. Copperline forwards serial to its stdout
-# (`--serial stdout`); we assert the result.
+# Boots straight into codec_selftest via `--run`/`--exit-on-return`
+# (Copperline's generated RunBoot:/RunProg: volumes - no staged boot
+# volume needed). codec_selftest exercises the same vectors as
+# tests/test_codec.c, emits PASS/FAIL lines over serial via RawPutChar for
+# diagnostics, and returns its failure count as its AmigaDOS return code;
+# Copperline relays that as its own exit status, which is what we assert.
 #
 # No Workbench files, handlers, or Mounts are needed - RawPutChar is the ROM
 # debug path straight to the Paula serial registers. No networking either -
@@ -32,34 +33,37 @@ ROOT=$(cd "$HERE/../.." && pwd)
 COPPERLINE=${COPPERLINE:-copperline}
 KICK=${KICK:-}   # empty => bundled AROS (no licensed ROM needed)
 BIN=${CODEC_SELFTEST_M68K:-$ROOT/build/codec_selftest}
-BENCH=${BENCH:-40} # emulated seconds to run; enough for the slower AROS boot
 
 [ -e "$BIN" ] || { echo "FAIL: missing $BIN" >&2; exit 2; }
 [ -z "$KICK" ] || [ -e "$KICK" ] || { echo "FAIL: KICK set but missing: $KICK" >&2; exit 2; }
 command -v "$COPPERLINE" >/dev/null || { echo "FAIL: $COPPERLINE not found" >&2; exit 2; }
 [ -n "$KICK" ] && echo "ROM: $KICK" || echo "ROM: bundled AROS"
 
-# --- stage the boot volume (just the harness binary) -------------------------
-mkdir -p "$HERE/sys/C"
-cp "$BIN" "$HERE/sys/C/codec_selftest"
-
 OUT=$(mktemp)
 cleanup() { rm -f "$OUT"; }
 trap cleanup EXIT INT TERM
 
-# --benchmark-until runs with no window until the given emulated time, then
-# exits; boot + self-test finish well before then. cd so `path = "sys"` in
-# machine.toml resolves relative to this directory. A ROM arg overrides the
+# --exit-on-return (which requires --run) ends the session the moment
+# codec_selftest's return code lands, instead of running unthrottled for a
+# fixed --benchmark-until window - Copperline's own exit status becomes
+# that return code (0 = all checks passed, clamped 0-255; 4 = the run
+# ended some other way before the program returned). cd so machine.toml's
+# relative paths resolve from this directory. A ROM arg overrides the
 # config's (absent) rom; with none, Copperline boots its bundled AROS.
-set -- --config machine.toml --noaudio --serial stdout --benchmark-until "$BENCH"
+set -- --config machine.toml --noaudio --serial stdout \
+    --run "$BIN" --exit-on-return
 [ -n "$KICK" ] && set -- "$@" "$KICK"
-( cd "$HERE" && "$COPPERLINE" "$@" ) >"$OUT" 2>/dev/null \
-    || { echo "FAIL: $COPPERLINE exited non-zero" >&2; cat "$OUT" >&2; exit 3; }
+STATUS=0
+( cd "$HERE" && "$COPPERLINE" "$@" ) >"$OUT" 2>/dev/null || STATUS=$?
 
 tr -d '\r' <"$OUT" >"$OUT.n" && mv "$OUT.n" "$OUT" # serial sends CRLF; drop CR
 echo "----- serial capture -----"; cat "$OUT"; echo "--------------------------"
-grep -q '^END' "$OUT" 2>/dev/null || { echo "FAIL: no END marker (raise BENCH?)" >&2; exit 1; }
-grep -q '^FAIL ' "$OUT" && { echo "FAIL: one or more codec checks failed on-target" >&2; exit 1; }
-grep -q '^RESULT=OK$' "$OUT" || { echo "FAIL: no RESULT=OK marker" >&2; exit 1; }
 
-echo "PASS: MQTT codec checks correct on 68020 (via serial)"
+# Status 4 means --exit-on-return never saw a return code (Copperline
+# ended for some other reason); any other nonzero status is codec_selftest's
+# own AmigaDOS return code (its failing-check count) relayed verbatim -
+# see docs/guide/headless.md#exit-statuses upstream.
+[ "$STATUS" -ne 4 ] || { echo "FAIL: $COPPERLINE ended before codec_selftest returned" >&2; exit 1; }
+[ "$STATUS" -eq 0 ] || { echo "FAIL: codec_selftest reported $STATUS failing check(s) on-target (or $COPPERLINE itself failed)" >&2; exit 1; }
+
+echo "PASS: MQTT codec checks correct on 68020 (via --exit-on-return)"
