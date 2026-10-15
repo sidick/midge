@@ -41,8 +41,11 @@ there too.
   Kickstart ROM or Workbench image (see `tests/net/README.md`) and runs in
   CI as well as locally.
 - CI is the five-verb contract (`build` / `test-host` / `test-target` /
-  `lint` / `dist`) via `sidick/amiga-workflows@v1` — ci.yml calls those
-  Makefile targets by name; keep them working.
+  `lint` / `dist`) — ci.yml calls those Makefile targets by name; keep them
+  working. `build`/`test-host`/`lint`/`dist` run via `sidick/amiga-workflows@v1`;
+  `test-target` runs as a local job instead, pinning a current Copperline
+  release (downloaded as the upstream AppImage) ahead of amiga-dev's own
+  baked-in build on `PATH` — see the comment on ci.yml's `test-target` job.
 
 ## Documentation lives in userdocs/
 

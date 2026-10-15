@@ -2,16 +2,19 @@ name: CI
 
 # ci: calls sidick/amiga-workflows' build-test.yml, which implements the
 # five-verb contract (see that repo's README.md, the document of record) --
-# build/test-host/test-target/lint all resolve to Makefile targets of the
-# same name (see Makefile's own "Verb contract" comment).
+# build/test-host/lint resolve to Makefile targets of the same name (see
+# Makefile's own "Verb contract" comment). test-target is the one verb
+# NOT delegated to it: see the local `test-target` job below for why.
 #
 # The `changes` job stays local (repo-specific path patterns aren't
 # something a shared workflow should know about) and its outputs feed
 # build-test.yml's run-* inputs directly, preserving the path-based
-# skip-on-docs-only-PR behavior. `broker-smoke` (host CLI tools against a
-# real Mosquitto), `broker-tls-smoke` (same, over a Mosquitto TLS listener
-# - gated by the same `broker` filter), `net-smoke` (cross-built mqtt_pub
-# under Copperline's HostSocket board against a real Mosquitto - see
+# skip-on-docs-only-PR behavior. `test-target` (on-target codec smoke test,
+# pinned to a current Copperline release rather than amiga-dev's baked-in
+# build - see below), `broker-smoke` (host CLI tools against a real
+# Mosquitto), `broker-tls-smoke` (same, over a Mosquitto TLS listener - gated
+# by the same `broker` filter), `net-smoke` (cross-built mqtt_pub under
+# Copperline's HostSocket board against a real Mosquitto - see
 # tests/net/README.md),
 # `library-smoke` (mqtt.library opened and driven on-target - the plain
 # OpenLibrary/CloseLibrary check, the full API against a real Mosquitto, and
@@ -19,7 +22,8 @@ name: CI
 # restart - see tests/library/) and `docs-build` (strict MkDocs + AmigaGuide
 # check)
 # stay local jobs -- none fit the five verbs cleanly (each needs an apt
-# package the shared workflow's own jobs don't install).
+# package the shared workflow's own jobs don't install, or in
+# test-target's case a newer Copperline than the shared image bundles).
 
 on:
   push:
@@ -77,10 +81,67 @@ jobs:
     with:
       run-build: ${{ needs.changes.outputs.build == 'true' }}
       run-test-host: ${{ needs.changes.outputs.host == 'true' }}
-      run-test-target: ${{ needs.changes.outputs.target == 'true' }}
+      run-test-target: false # see the local test-target job below
       run-lint: ${{ needs.changes.outputs.build == 'true' }}
     secrets:
       AMIGA_REAL_ROM_B64: ${{ secrets.AMIGA_REAL_ROM_B64 }}
+
+  test-target:
+    name: test-target
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.target == 'true'
+    # amiga-dev:1 still supplies the m68k-amigaos-gcc toolchain; its own
+    # baked-in Copperline is pinned well behind upstream (see amiga-dev's
+    # Dockerfile ARG COPPERLINE_VERSION) and lacks --run/--exit-on-return,
+    # which tests/copperline/run.sh now depends on. Rather than wait on
+    # that shared image being rebuilt - or add this as a new input to
+    # amiga-workflows' build-test.yml, which every one of its consumers
+    # would then carry - download a current Copperline release here and
+    # put it ahead of the image's own on PATH, the same workaround
+    # narrator.wyoming's copperline-smoke job uses.
+    container: ghcr.io/sidick/amiga-dev:1
+    env:
+      COPPERLINE_VERSION: "1.0.0"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Decode real ROM, if supplied
+        env:
+          AMIGA_REAL_ROM_B64: ${{ secrets.AMIGA_REAL_ROM_B64 }}
+        run: |
+          if [ -n "${AMIGA_REAL_ROM_B64:-}" ]; then
+            echo "$AMIGA_REAL_ROM_B64" | base64 -d > "$RUNNER_TEMP/real.rom"
+            echo "AMIGA_REAL_ROM=$RUNNER_TEMP/real.rom" >> "$GITHUB_ENV"
+          fi
+      - name: Cache Copperline AppImage
+        id: copperline-cache
+        uses: actions/cache@v6
+        with:
+          path: /tmp/copperline.AppImage
+          key: copperline-appimage-${{ env.COPPERLINE_VERSION }}
+      - name: Download Copperline AppImage
+        if: steps.copperline-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o /tmp/copperline.AppImage \
+            "https://github.com/CopperlineHQ/Copperline/releases/download/v${COPPERLINE_VERSION}/Copperline-${COPPERLINE_VERSION}-x86_64.AppImage"
+      - name: Extract Copperline AppImage
+        # --appimage-extract unsquashes it without FUSE/libfuse2, which
+        # this container doesn't have installed.
+        run: |
+          chmod +x /tmp/copperline.AppImage
+          cd /tmp && /tmp/copperline.AppImage --appimage-extract
+          mkdir -p "$HOME/.local/bin"
+          ln -sf /tmp/squashfs-root/AppRun "$HOME/.local/bin/copperline"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify downloaded Copperline version
+        run: |
+          got=$(copperline --version | tee /dev/stderr)
+          case "$got" in
+            *"$COPPERLINE_VERSION"*) ;;
+            *) echo "expected Copperline $COPPERLINE_VERSION, got: $got" >&2; exit 1 ;;
+          esac
+      - name: make test-target
+        run: PATH=/opt/amiga/bin:$PATH make test-target
 
   broker-smoke:
     name: Broker smoke (host CLIs vs Mosquitto)
